@@ -1,5 +1,11 @@
 import numpy as np
 
+import pandas as pd
+
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import WhiteKernel
+from sklearn.gaussian_process.kernels import RBF
+
 THRESHOLD = 0.5
 W1 = 1
 W2 = 20
@@ -66,13 +72,27 @@ class Model():
             TODO: enter your code here
         """
         ## dummy code below 
-        y = np.ones(test_x.shape[0]) * THRESHOLD - 0.00001
+        y = self.gpr.predict(test_x)
+        
         return y
 
     def fit_model(self, train_x, train_y):
         """
              TODO: enter your code here
         """
+        df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
+        df = pd.DataFrame(data = df_vals,columns = ['x0','x1','y'])
+        df_left = df[df['x0']<-0.5]
+        df_left = df_left.sample(frac=0.1,random_state=42)
+        df_right = df[df['x0']>-0.5]
+        df_train = pd.concat([df_left,df_right])
+
+        X_train = df_train[['x0','x1']].values
+        y_train = df_train['y'].values
+
+        kernel = RBF(length_scale=np.exp(-1.18020928))+WhiteKernel(noise_level=np.exp(-5.85276903))
+        self.gpr = GaussianProcessRegressor(kernel=kernel,copy_X_train=False,random_state=42).fit(X_train, y_train)
+
         pass
 
 
