@@ -64,7 +64,9 @@ It uses predictions to compare to the ground truth using the cost_function above
 
 
 class Model():
-    def __init__(self, use_skit_learn=True, kernel=kernels.custom_kernel1, variance=1, correct_y_pred=False):
+    def __init__(self, use_skit_learn=True, kernel=kernels.custom_kernel1, 
+            variance=1, correct_y_pred=False,
+            public_score_run=True):
         """
             TODO: enter your code here
         """
@@ -77,6 +79,7 @@ class Model():
         self.variance = variance
         self.use_skit_learn = use_skit_learn
         self.correct_y_pred = correct_y_pred
+        self.public_score_run = public_score_run
 
         #"implicit" attributes:
         self.rho = None
@@ -84,6 +87,26 @@ class Model():
         self.correction_obj_vals_sample = None
         self.test_x = None
         pass
+
+    def preprocess_public_score_run(train_x,train_y):
+        df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
+        print(df_vals)
+        print(df_vals.shape)
+        df = pd.DataFrame(data = df_vals,columns = ['x0','x1','y'])
+        print(df.shape)
+        self.df = df 
+        
+        df_left = df[df['x0']<-0.5]
+        df_left = df_left.sample(frac=0.05,random_state=42)
+        df_right = df[df['x0']>-0.5]
+        self.df_left = df_left
+        self.df_right = df_right
+
+        self.df_left_right = pd.concat([self.df_left,self.df_right])
+
+        train_x = self.df_left_right[['x0','x1']].values
+        train_y = self.df_left_right['y'].values
+        return train_x,train_y
 
     def correction_obj_integrand(self,y1,y2):
         return cost_function(np.array([y1]),np.array([y2]))*self.rho(y1)
@@ -137,8 +160,11 @@ class Model():
         """
              TODO: enter your code here
         """
-        self.train_x = train_x
-        self.train_y = train_y
+        if public_score_run:
+            self.train_x,self.train_y = self.preprocess_public_score_run(train_x,train_y)
+        else:
+            self.train_x = train_x
+            self.train_y = train_y
         
         if self.use_skit_learn:
             self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42)
@@ -164,6 +190,7 @@ class cv_eval():
     def __init__(self, cv_splits, kernel, use_skit_learn=True):
         self.K_cv = cv_splits
         self.model = Model(use_skit_learn, kernel=kernel)
+        self.df_left_frac = 0.01 #run speed O(N^3)? Can set 0.01 for testing purposes
     
     def preprocess(self, train_x, train_y):
         df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
@@ -174,7 +201,7 @@ class cv_eval():
         self.df = df 
         
         df_left = df[df['x0']<-0.5]
-        df_left = df_left.sample(frac=0.1,random_state=42)
+        df_left = df_left.sample(frac=self.df_left_frac,random_state=42)
         df_right = df[df['x0']>-0.5]
         self.df_left = df_left
         self.df_right = df_right
