@@ -34,7 +34,7 @@ def cost_function(true, predicted):
     cost[mask_w1] = cost[mask_w1]*W1
     cost[mask_w2] = cost[mask_w2]*W2
     cost[mask_w3] = cost[mask_w3]*W3
-c
+
     # true value below threshold (case 2)
     mask = true <= THRESHOLD
     mask_w1 = np.logical_and(predicted>true,mask)
@@ -64,7 +64,10 @@ It uses predictions to compare to the ground truth using the cost_function above
 
 
 class Model():
-    def __init__(self, use_skit_learn=True, kernel=kernels.custom_kernel1, 
+    def __init__(self, use_skit_learn=True, 
+            #kernel=kernels.custom_kernel1, 
+            use_nystrom=False,
+            kernel=kernels.sklearn_best(),
             variance=1, correct_y_pred=False,
             public_score_run=True):
         """
@@ -88,7 +91,7 @@ class Model():
         self.test_x = None
         pass
 
-    def preprocess_public_score_run(train_x,train_y):
+    def preprocess_public_score_run(self,train_x,train_y):
         df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
         print(df_vals)
         print(df_vals.shape)
@@ -142,8 +145,8 @@ class Model():
             K_Q_x = self.kernel(self.test_x, self.train_x)
             K_x_Q = self.kernel(self.train_x, self.test_x)
             K_Q_Q = self.kernel(self.test_x, self.test_x)
-            means = np.dot(K_Q_x, np.dot(self.K_x_x_inv, self.train_y))
-            cov = K_Q_Q - np.dot(K_Q_x, np.dot(self.K_x_x_inv, K_x_Q))
+            means = K_Q_x.dot(self.K_x_x_inv).dot(self.train_y)
+            cov = K_Q_Q - K_Q_x.dot(self.K_x_x_inv).dot(K_x_Q)
             vars_val = np.diag(cov)
             y = np.random.multivariate_normal(means.ravel(), cov, 1) #sample from the multivar normal
 
@@ -160,7 +163,7 @@ class Model():
         """
              TODO: enter your code here
         """
-        if public_score_run:
+        if self.public_score_run:
             self.train_x,self.train_y = self.preprocess_public_score_run(train_x,train_y)
         else:
             self.train_x = train_x
@@ -171,9 +174,13 @@ class Model():
             self.fitted = self.gpr.fit( self.train_x , self.train_y)
         
         else:
-            self.K_x_x = self.kernel(self.train_x, self.train_x)
-            self.K_x_x_inv = np.linalg.inv(self.K_x_x +
-                                               (self.variance * np.eye(*self.K_x_x.shape)))
+            if self.use_nystrom:
+                q = 100
+
+            else:
+                self.K_x_x = self.kernel(self.train_x, self.train_x)
+                self.K_x_x_inv = np.linalg.inv(self.K_x_x +
+                                                   (self.variance * np.eye(*self.K_x_x.shape)))
         
         
     def likelihood(self):
