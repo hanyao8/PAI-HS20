@@ -10,6 +10,10 @@ from sklearn.gaussian_process.kernels import WhiteKernel,RBF,Matern
 import kernels
 import utils
 
+import os
+import logging
+import sys
+
 THRESHOLD = 0.5
 W1 = 1
 W2 = 20
@@ -65,7 +69,7 @@ It uses predictions to compare to the ground truth using the cost_function above
 
 
 class Model():
-    def __init__(self, model_config_override):
+    def __init__(self, model_config_override={}):
         
 
         """
@@ -74,11 +78,11 @@ class Model():
         model_config = {
                 "use_skit_learn":True, 
                 "use_nystrom":False,
-                "nystrom_q":100,
+                "nystrom_q":1000,
                 "kernel":kernels.sklearn_best(),
-                "variance":1,
+                "variance":1e-3,
                 "correct_y_pred":False,
-                "model_preprocess_left_frac":0.05 }
+                "model_preprocess_left_frac":0.1 }
         for k in list(model_config_override.keys()):
             model_config[k] = model_config_override[k]
 
@@ -153,14 +157,18 @@ class Model():
         
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
+            y = np.sqrt(y)
         else:
             K_Q_x = self.kernel(self.test_x, self.train_x)
             K_x_Q = self.kernel(self.train_x, self.test_x)
             K_Q_Q = self.kernel(self.test_x, self.test_x)
             means = K_Q_x.dot(self.K_x_x_inv).dot(self.train_y)
             cov = K_Q_Q - K_Q_x.dot(self.K_x_x_inv).dot(K_x_Q)
+            cov = (cov+cov.transpose())/2
             vars_val = np.diag(cov)
-            y = np.random.multivariate_normal(means.ravel(), cov, 1) #sample from the multivar normal
+            y = (np.random.multivariate_normal(means.ravel(), cov, 1)).flatten() #sample from the multivar normal
+            print(y.shape)
+            logging.info(str(y.shape))
 
         if self.correct_y_pred:
         #y_correction vectorization in dev
@@ -175,6 +183,8 @@ class Model():
         """
              TODO: enter your code here
         """
+        logging_setup()
+
         if self.model_preprocess_left_frac<0.99:
             self.train_x,self.train_y = self.model_preprocess(train_x,train_y)
         else:
@@ -187,6 +197,7 @@ class Model():
             self.fitted = self.gpr.fit( self.train_x , self.train_y)
         else:
             if self.use_nystrom:
+                logging.info("Using Nystrom")
                 K_nq = self.kernel(self.train_x,self.train_x[:self.q])
                 K_qq = self.kernel(self.train_x[:self.q],self.train_x[:self.q])
                 K_qq_eigendec = np.linalg.eig(K_qq)
@@ -315,6 +326,19 @@ def main():
 
     print(prediction)
 
+def logging_setup():
+    print("logging_setup")
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    logging_path = os.path.join(*[project_dir,'train.log'])
+    logging.basicConfig(filename=logging_path, filemode='a',\
+            format='%(asctime)s - %(name)s - %(message)s', level=logging.INFO)
+    logging.info("Begin logging for single training run")
+    root = logging.getLogger()
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
 
 if __name__ == "__main__":
     main()
