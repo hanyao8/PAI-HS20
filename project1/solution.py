@@ -8,6 +8,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel,RBF,Matern
 
 import kernels
+import utils
 
 THRESHOLD = 0.5
 W1 = 1
@@ -64,25 +65,37 @@ It uses predictions to compare to the ground truth using the cost_function above
 
 
 class Model():
-    def __init__(self, use_skit_learn=True, 
-            #kernel=kernels.custom_kernel1, 
-            use_nystrom=False,
-            kernel=kernels.sklearn_best(),
-            variance=1, correct_y_pred=False,
-            public_score_run=True):
+    def __init__(self, model_config_override):
+        
+
         """
             TODO: enter your code here
         """
+        model_config = {
+                "use_skit_learn":True, 
+                "use_nystrom":False,
+                "nystrom_q":100,
+                "kernel":kernels.sklearn_best(),
+                "variance":1,
+                "correct_y_pred":False,
+                "model_preprocess_left_frac":0.05 }
+        for k in list(model_config_override.keys()):
+            model_config[k] = model_config_override[k]
+
         self.rbf_w = 1.0
         self.rbf_ls = np.exp(-1.18020928)
         self.wk_nl = np.exp(-5.85276903)
 
-        self.kernel = kernel
+        self.kernel = model_config["kernel"]
         #self.THRESHOLD = THRESHOLD
-        self.variance = variance
-        self.use_skit_learn = use_skit_learn
-        self.correct_y_pred = correct_y_pred
-        self.public_score_run = public_score_run
+        self.variance = model_config["variance"]
+        self.use_skit_learn = model_config["use_skit_learn"]
+        self.use_nystrom = model_config["use_nystrom"]
+        self.q = model_config["nystrom_q"]
+
+        self.correct_y_pred = model_config["correct_y_pred"]
+        #self.public_score_run = public_score_run
+        self.model_preprocess_left_frac = model_config["model_preprocess_left_frac"]
 
         #"implicit" attributes:
         self.rho = None
@@ -91,7 +104,7 @@ class Model():
         self.test_x = None
         pass
 
-    def preprocess_public_score_run(self,train_x,train_y):
+    def model_preprocess(self,train_x,train_y):
         df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
         print(df_vals)
         print(df_vals.shape)
@@ -100,7 +113,7 @@ class Model():
         self.df = df 
         
         df_left = df[df['x0']<-0.5]
-        df_left = df_left.sample(frac=0.05,random_state=42)
+        df_left = df_left.sample(frac=self.model_preprocess_left_frac,random_state=42)
         df_right = df[df['x0']>-0.5]
         self.df_left = df_left
         self.df_right = df_right
@@ -140,7 +153,6 @@ class Model():
         
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
-        
         else:
             K_Q_x = self.kernel(self.test_x, self.train_x)
             K_x_Q = self.kernel(self.train_x, self.test_x)
@@ -163,20 +175,39 @@ class Model():
         """
              TODO: enter your code here
         """
-        if self.public_score_run:
-            self.train_x,self.train_y = self.preprocess_public_score_run(train_x,train_y)
+        if self.model_preprocess_left_frac<0.99:
+            self.train_x,self.train_y = self.model_preprocess(train_x,train_y)
         else:
             self.train_x = train_x
             self.train_y = train_y
         
+        self.n = np.shape(self.train_x)[0]
         if self.use_skit_learn:
             self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42)
             self.fitted = self.gpr.fit( self.train_x , self.train_y)
-        
         else:
             if self.use_nystrom:
-                q = 100
+                K_nq = self.kernel(self.train_x,self.train_x[:self.q])
+                K_qq = self.kernel(self.train_x[:self.q],self.train_x[:self.q])
+                K_qq_eigendec = np.linalg.eig(K_qq)
+                Lambda_qq = np.diag(K_qq_eigendec[0])
+                U_qq = K_qq_eigendec[1]
 
+                #For the minor components- U_qq contains some complex columns
+                #if we don't do PCA
+                p = utils.pca_find_p(K_qq_eigendec[0],pca_thresh=(1-1e-3))
+                self.K_qq_eigendec = K_qq_eigendec
+                self.p = p
+                Lambda_pp = np.diag(K_qq_eigendec[0][:p+1])
+                U_qp = U_qq[:,:p+1]
+
+                Q = K_nq.dot(U_qp).dot(np.sqrt(np.linalg.inv(Lambda_pp)))
+                self.Q = Q
+
+                #reduced_inv = np.linalg.inv( self.variance*np.eye(self.q)+(Q.transpose()).dot(Q) )
+                reduced_inv = np.linalg.inv( self.variance*np.eye(Q.shape[1])+(Q.transpose()).dot(Q) )
+                self.K_x_x_inv = (1/self.variance)*np.eye(self.n) - \
+                        (1/self.variance)*Q.dot(reduced_inv).dot(Q.transpose())
             else:
                 self.K_x_x = self.kernel(self.train_x, self.train_x)
                 self.K_x_x_inv = np.linalg.inv(self.K_x_x +
@@ -194,10 +225,14 @@ class Model():
 
 
 class cv_eval():
-    def __init__(self, cv_splits, kernel, use_skit_learn=True):
+    def __init__(self,
+            cv_splits,
+            cv_preprocess_left_frac,
+            model_config):
         self.K_cv = cv_splits
-        self.model = Model(use_skit_learn, kernel=kernel)
-        self.df_left_frac = 0.01 #run speed O(N^3)? Can set 0.01 for testing purposes
+        #self.model = Model(use_skit_learn, kernel=kernel, preprocess_frac=1.0)
+        self.model = Model(model_config)
+        self.cv_preprocess_left_frac = cv_preprocess_left_frac #run speed O(N^3)? Can set 0.01 for testing purposes
     
     def preprocess(self, train_x, train_y):
         df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
@@ -208,7 +243,7 @@ class cv_eval():
         self.df = df 
         
         df_left = df[df['x0']<-0.5]
-        df_left = df_left.sample(frac=self.df_left_frac,random_state=42)
+        df_left = df_left.sample(frac=self.cv_preprocess_left_frac,random_state=42)
         df_right = df[df['x0']>-0.5]
         self.df_left = df_left
         self.df_right = df_right
@@ -232,13 +267,14 @@ class cv_eval():
         self.y_val = df_val['y'].values
     
     def run_cross_validation(self, train_x, train_y):
-        self.preprocess(train_x, train_y)
+        if self.cv_preprocess_left_frac < 0.999:
+            self.preprocess(train_x, train_y)
         val_cost_array = np.array([])
-        models = []
+        self.models = []
         for i in range(0,self.K_cv):
             self.get_split(i)
             gpr = self.model.fit_model(self.X_train, self.y_train)
-            #models.append(gpr)
+            self.models.append(gpr)
            # print("training gpr score %f"%(gpr.score(X_train,y_train)))
 
             y_train_pred = self.model.predict(self.X_train)
