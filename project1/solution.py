@@ -76,13 +76,13 @@ class Model():
             TODO: enter your code here
         """
         model_config = {
-                "use_skit_learn":True, 
-                "use_nystrom":False,
-                "nystrom_q":1000,
+                "use_skit_learn":False, 
+                "use_nystrom":True,
+                "nystrom_q":100,
                 "kernel":kernels.sklearn_best(),
-                "variance":1e-3,
+                "variance":1,
                 "correct_y_pred":False,
-                "model_preprocess_left_frac":0.1 }
+                "model_preprocess_left_frac":0.75 }
         for k in list(model_config_override.keys()):
             model_config[k] = model_config_override[k]
 
@@ -157,7 +157,6 @@ class Model():
         
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
-            y = np.sqrt(y)
         else:
             K_Q_x = self.kernel(self.test_x, self.train_x)
             K_x_Q = self.kernel(self.train_x, self.test_x)
@@ -166,9 +165,12 @@ class Model():
             cov = K_Q_Q - K_Q_x.dot(self.K_x_x_inv).dot(K_x_Q)
             cov = (cov+cov.transpose())/2
             vars_val = np.diag(cov)
+            print(means)
+            print(cov)
             y = (np.random.multivariate_normal(means.ravel(), cov, 1)).flatten() #sample from the multivar normal
             print(y.shape)
             logging.info(str(y.shape))
+            print(y)
 
         if self.correct_y_pred:
         #y_correction vectorization in dev
@@ -177,6 +179,8 @@ class Model():
                 y_mean_corrected = np.append(y_mean_corrected,self.correct_y(y_mean,y_std))
             return y_mean_corrected
 
+        y = np.clip(y,a_min=0,a_max=1)
+        y = np.sqrt(y)
         return y
 
     def fit_model(self, train_x, train_y):
@@ -206,7 +210,7 @@ class Model():
 
                 #For the minor components- U_qq contains some complex columns
                 #if we don't do PCA
-                p = utils.pca_find_p(K_qq_eigendec[0],pca_thresh=(1-1e-3))
+                p = utils.pca_find_p(K_qq_eigendec[0],pca_thresh=(1-1e-2))
                 self.K_qq_eigendec = K_qq_eigendec
                 self.p = p
                 Lambda_pp = np.diag(K_qq_eigendec[0][:p+1])
