@@ -202,17 +202,20 @@ class Model():
                 U_qp = U_qq[:,:p+1]
 
                 Q = K_nq.dot(U_qp).dot(np.sqrt(np.linalg.inv(Lambda_pp)))
+                self.U_qp = U_qp
+                self.K_nq = K_nq
+                self.Lambda_pp = Lambda_pp
+
                 self.Q = Q
 
                 #reduced_inv = np.linalg.inv( self.variance*np.eye(self.q)+(Q.transpose()).dot(Q) )
                 reduced_inv = np.linalg.inv( self.variance*np.eye(Q.shape[1])+(Q.transpose()).dot(Q) )
                 self.K_x_x_inv = (1/self.variance)*np.eye(self.n) - \
-                        (1/self.variance)*Q.dot(reduced_inv).dot(Q.transpose())
+                        (1/self.variance)*Q.dot(reduced_inv).dot(Q.transpose()).real
             else:
                 self.K_x_x = self.kernel(self.train_x, self.train_x)
                 self.K_x_x_inv = np.linalg.inv(self.K_x_x +
                                                    (self.variance * np.eye(*self.K_x_x.shape)))
-        
         
     def likelihood(self):
         if self.use_skit_learn:
@@ -233,6 +236,7 @@ class cv_eval():
         #self.model = Model(use_skit_learn, kernel=kernel, preprocess_frac=1.0)
         self.model = Model(model_config)
         self.cv_preprocess_left_frac = cv_preprocess_left_frac #run speed O(N^3)? Can set 0.01 for testing purposes
+        self.model_config = model_config
     
     def preprocess(self, train_x, train_y):
         df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
@@ -273,8 +277,9 @@ class cv_eval():
         self.models = []
         for i in range(0,self.K_cv):
             self.get_split(i)
-            gpr = self.model.fit_model(self.X_train, self.y_train)
-            self.models.append(gpr)
+            self.model.fit_model(self.X_train, self.y_train)
+            if self.model_config["use_skit_learn"]:
+                self.models.append(self.model.fitted)
            # print("training gpr score %f"%(gpr.score(X_train,y_train)))
 
             y_train_pred = self.model.predict(self.X_train)
