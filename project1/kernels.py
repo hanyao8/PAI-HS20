@@ -13,4 +13,7 @@ def sklearn_best():
     #RBF(length_scale=np.exp(-1.18020928))+WhiteKernel(noise_level=np.exp(-5.85276903))
     #kernel = self.rbf_w*RBF(length_scale=self.rbf_ls)+WhiteKernel(noise_level=self.wk_nl)
     #kernel = RBF(length_scale=self.rbf_ls)+WhiteKernel(noise_level=self.wk_nl)
-    return 1.0+0.5*Matern()+WhiteKernel()
+    #return 1.0+0.5*Matern()+WhiteKernel()
+    return 0.386**2 + 0.165**2 *\
+            Matern(length_scale=0.32, nu=1.5) +\
+            WhiteKernel(noise_level=0.0026)
