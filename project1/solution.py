@@ -69,6 +69,9 @@ It uses predictions to compare to the ground truth using the cost_function above
 
 
 class Model():
+    '''
+    Implementation Nystrom from ...
+    Implementation FITC from Snelson et al'''
     def __init__(self, model_config_override={}):
         
 
@@ -78,6 +81,7 @@ class Model():
         model_config = {
                 "use_skit_learn":False, 
                 "use_nystrom":True,
+                "use_fitc" : False,
                 "nystrom_q":100,
                 "kernel":kernels.sklearn_best(),
                 "variance":1,
@@ -95,6 +99,7 @@ class Model():
         self.variance = model_config["variance"]
         self.use_skit_learn = model_config["use_skit_learn"]
         self.use_nystrom = model_config["use_nystrom"]
+        self.use_fitc = model_config["use_fitc"]
         self.q = model_config["nystrom_q"]
 
         self.correct_y_pred = model_config["correct_y_pred"]
@@ -107,13 +112,20 @@ class Model():
         self.correction_obj_vals_sample = None
         self.test_x = None
         pass
-
+    
+    
+    def inverse(self, M):
+        if not np.allclose(np.linalg.det(M), 0., atol=1e-5):
+            return np.linalg.inv(M)
+        else:
+            return np.linalg.pinv(M)
+        
     def model_preprocess(self,train_x,train_y):
         df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
-        print(df_vals)
-        print(df_vals.shape)
+        #print(df_vals)
+        #print(df_vals.shape)
         df = pd.DataFrame(data = df_vals,columns = ['x0','x1','y'])
-        print(df.shape)
+        #print(df.shape)
         self.df = df 
         
         df_left = df[df['x0']<-0.5]
@@ -128,7 +140,7 @@ class Model():
         train_y = self.df_left_right['y'].values
         return train_x,train_y
 
-    def correction_obj_integrand(self,y1,y2):
+    def correction_obj_integrand(self,y1,y2): # Remark, the 2 functions below can be fused as one
         return cost_function(np.array([y1]),np.array([y2]))*self.rho(y1)
     
     def correction_obj(self,y2,y1_bounds):
@@ -155,23 +167,36 @@ class Model():
         """
         self.test_x = test_x  
         
+        ### Get prediction
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
-        else:
-            K_Q_x = self.kernel(self.test_x, self.train_x)
-            K_x_Q = self.kernel(self.train_x, self.test_x)
-            K_Q_Q = self.kernel(self.test_x, self.test_x)
-            means = K_Q_x.dot(self.K_x_x_inv).dot(self.train_y)
-            cov = K_Q_Q - K_Q_x.dot(self.K_x_x_inv).dot(K_x_Q)
+        elif self.use_fitc:
+            K_q_star = self.kernel(self.z, self.test_x)
+            K_star_star = self.kernel(self.test_x, self.test_x)
+            Qn_star = np.dot(self.K_qn.T, np.dot(self.K_qq_inv, K_q_star))
+
+            means = K_q_star.T.dot(self.Q_inv.dot(self.K_qn.dot(self.A_inv.dot(self.train_y))))
+            cov = K_star_star - K_q_star.T.dot(self.K_qq_inv - self.Q_inv).dot(K_q_star) 
+            vars_val = np.diag(cov)
+            y = (np.random.multivariate_normal(means.ravel(), cov, 1)).flatten() #sample from the multivar normal
+            logging.info(str(y.shape))
+
+        else: 
+            K_star_x = self.kernel(self.test_x, self.train_x)
+            K_x_star = self.kernel(self.train_x, self.test_x)
+            K_star_star = self.kernel(self.test_x, self.test_x)
+            means = K_star_x.dot(self.K_x_x_inv).dot(self.train_y)
+            cov = K_star_star - K_star_x.dot(self.K_x_x_inv).dot(K_x_star)
             cov = (cov+cov.transpose())/2
             vars_val = np.diag(cov)
-            print(means)
-            print(cov)
+            #print(means)
+            #print(cov)
             y = (np.random.multivariate_normal(means.ravel(), cov, 1)).flatten() #sample from the multivar normal
-            print(y.shape)
+            #print(y.shape)
             logging.info(str(y.shape))
-            print(y)
-
+            #print(y)
+        
+        ### Correct prediction
         if self.correct_y_pred:
         #y_correction vectorization in dev
             y_mean_corrected = np.array([])
@@ -188,7 +213,8 @@ class Model():
              TODO: enter your code here
         """
         logging_setup()
-
+        
+        ### Preprocess 
         if self.model_preprocess_left_frac<0.99:
             self.train_x,self.train_y = self.model_preprocess(train_x,train_y)
         else:
@@ -196,49 +222,70 @@ class Model():
             self.train_y = train_y
         
         self.n = np.shape(self.train_x)[0]
+        
+        ### Preform fit
         if self.use_skit_learn:
             self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42)
             self.fitted = self.gpr.fit( self.train_x , self.train_y)
+        elif self.use_nystrom:
+            logging.info("Using Nystrom")
+            K_nq = self.kernel(self.train_x,self.train_x[:self.q])
+            K_qq = self.kernel(self.train_x[:self.q],self.train_x[:self.q])
+            K_qq_eigendec = np.linalg.eig(K_qq)
+            Lambda_qq = np.diag(K_qq_eigendec[0])
+            U_qq = K_qq_eigendec[1]
+
+            #For the minor components- U_qq contains some complex columns
+            #if we don't do PCA
+            p = utils.pca_find_p(K_qq_eigendec[0],pca_thresh=(1-1e-2))
+            self.K_qq_eigendec = K_qq_eigendec
+            self.p = p
+            Lambda_pp = np.diag(K_qq_eigendec[0][:p+1])
+            U_qp = U_qq[:,:p+1]
+
+            Q = K_nq.dot(U_qp).dot(np.sqrt(np.linalg.inv(Lambda_pp)))
+            self.U_qp = U_qp
+            self.K_nq = K_nq
+            self.Lambda_pp = Lambda_pp
+
+            self.Q = Q
+
+            #reduced_inv = np.linalg.inv( self.variance*np.eye(self.q)+(Q.transpose()).dot(Q) )
+            reduced_inv = np.linalg.inv( self.variance*np.eye(Q.shape[1])+(Q.transpose()).dot(Q) )
+            self.K_x_x_inv = (1/self.variance)*np.eye(self.n) - \
+                    (1/self.variance)*Q.dot(reduced_inv).dot(Q.transpose()).real
+            
+        elif self.use_fitc:
+            logging.info("Using FITC")
+            self.z = self.train_x[:self.q] #??
+
+            K_qq = self.kernel(self.z, self.z)
+            self.K_qn = self.kernel(self.z, self.train_x)
+            self.Knn = self.kernel(self.train_x, self.train_x)
+            self.K_qq_inv = self.inverse(K_qq)
+            self.KK = np.dot(self.K_qn.T, np.dot(self.K_qq_inv, self.K_qn))
+            Lambda = self.Knn - self.KK 
+            self.A = np.diag(np.diag( Lambda + self.variance * np.eye(*self.Knn.shape)))
+            self.A_inv = self.inverse(self.A)
+            self.Q_inv = self.inverse(K_qq + np.dot(self.K_qn, np.dot(self.A_inv, self.K_qn.T)))
+
         else:
-            if self.use_nystrom:
-                logging.info("Using Nystrom")
-                K_nq = self.kernel(self.train_x,self.train_x[:self.q])
-                K_qq = self.kernel(self.train_x[:self.q],self.train_x[:self.q])
-                K_qq_eigendec = np.linalg.eig(K_qq)
-                Lambda_qq = np.diag(K_qq_eigendec[0])
-                U_qq = K_qq_eigendec[1]
-
-                #For the minor components- U_qq contains some complex columns
-                #if we don't do PCA
-                p = utils.pca_find_p(K_qq_eigendec[0],pca_thresh=(1-1e-2))
-                self.K_qq_eigendec = K_qq_eigendec
-                self.p = p
-                Lambda_pp = np.diag(K_qq_eigendec[0][:p+1])
-                U_qp = U_qq[:,:p+1]
-
-                Q = K_nq.dot(U_qp).dot(np.sqrt(np.linalg.inv(Lambda_pp)))
-                self.U_qp = U_qp
-                self.K_nq = K_nq
-                self.Lambda_pp = Lambda_pp
-
-                self.Q = Q
-
-                #reduced_inv = np.linalg.inv( self.variance*np.eye(self.q)+(Q.transpose()).dot(Q) )
-                reduced_inv = np.linalg.inv( self.variance*np.eye(Q.shape[1])+(Q.transpose()).dot(Q) )
-                self.K_x_x_inv = (1/self.variance)*np.eye(self.n) - \
-                        (1/self.variance)*Q.dot(reduced_inv).dot(Q.transpose()).real
-            else:
-                self.K_x_x = self.kernel(self.train_x, self.train_x)
-                self.K_x_x_inv = np.linalg.inv(self.K_x_x +
-                                                   (self.variance * np.eye(*self.K_x_x.shape)))
+            self.K_x_x = self.kernel(self.train_x, self.train_x)
+            self.K_x_x_inv = np.linalg.inv(self.K_x_x +
+                                               (self.variance * np.eye(*self.K_x_x.shape)))
         
     def likelihood(self):
         if self.use_skit_learn:
             log_likelihood = log_marginal_likelihood()
+            
+        elif self.use_fitc:
+            log_likelihood = (-0.5 * np.log(np.linalg.det(self.KK + self.A))
+                             -0.5 * self.train_y.T.dot(self.inverse(self.KK + self.A)).dot(self.train_y)
+                             -0.5 * len(self.train_y) * np.log(2*np.pi))
         else:
-            log_likelihood = (-0.5 * np.dot(self.y_train.T, np.dot(self.K_train_train_inv, self.y_train))
-                     -0.5 * np.log(np.linalg.det(self.K_train_train+np.eye(*self.K_train_train.shape)))
-                     -0.5 * self.y_train.shape[0] * np.log(2*np.pi))
+            log_likelihood = (-0.5 * np.dot(self.train_y.T, np.dot(self.K_x_x_inv, self.train_y))
+                     -0.5 * np.log(np.linalg.det(self.K_x_x+np.eye(*self.K_x_x.shape)))
+                     -0.5 * self.train_y.shape[0] * np.log(2*np.pi))
         return log_likelihood
 
 
@@ -255,8 +302,8 @@ class cv_eval():
     
     def preprocess(self, train_x, train_y):
         df_vals = np.stack([train_x[:,0],train_x[:,1],train_y],axis=1)
-        print(df_vals)
-        print(df_vals.shape)
+        #print(df_vals)
+        #print(df_vals.shape)
         df = pd.DataFrame(data = df_vals,columns = ['x0','x1','y'])
         print(df.shape)
         self.df = df 
@@ -289,6 +336,7 @@ class cv_eval():
         if self.cv_preprocess_left_frac < 0.999:
             self.preprocess(train_x, train_y)
         val_cost_array = np.array([])
+        marg_log_likelihood_array = np.array([])
         self.models = []
         for i in range(0,self.K_cv):
             self.get_split(i)
@@ -305,10 +353,15 @@ class cv_eval():
             #print(y_val_pred)
             #print(np.shape(y_val_pred))
             
+            val_llikelihood = self.model.likelihood()
             val_cost = cost_function(self.y_val,y_val_pred)
             print("val cost fn        %f"%(val_cost))
+            print("val log likelihood fn        %f"%(val_llikelihood))
             val_cost_array = np.append(val_cost_array,val_cost)
+            marg_log_likelihood_array = np.append(marg_log_likelihood_array,val_llikelihood)
             print("\n")
+            
+        print(marg_log_likelihood_array)
         return val_cost_array
 
 
@@ -343,6 +396,7 @@ def logging_setup():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     root.addHandler(handler)
+
 
 if __name__ == "__main__":
     main()
