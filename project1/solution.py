@@ -161,12 +161,30 @@ class Model():
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
         elif self.use_nystrom_skl:
-            y, std = self.fitted.predict(self.feature_map_nystroem.transform(self.test_x), return_std=True)
-            print(std)
-            for i in range(0,len(y)):
-                if(y[i] < 0.35): y[i] = y[i]*(1-2*std[i])
-                elif(y[i] < 0.5): y[i] = y[i]*(1+10*std[i])
-                else: y[i] = y[i]*(1+2*std[i])
+            #y, std = self.fitted.predict(self.feature_map_nystroem.transform(self.test_x), return_std=True)
+            #print(std)
+            num_samples = 100
+            y_samples_vec = self.fitted.sample_y(self.feature_map_nystroem.transform(self.test_x), num_samples, 42)
+            #print(y_samples_vec.shape)
+            #for n in range(0,len(self.test_x)): # for each point in test set
+
+            y = np.repeat(1.0, len(self.test_x))
+            for n in range(0,len(self.test_x)): # for each data point in test set
+                min_cost = 99999999999
+                min_sample = 0
+                for i in range(0, num_samples): # evaluate all possible predictions 
+                    pred_vec = np.repeat(y_samples_vec[n][i], num_samples)
+                    total_prediction_cost = cost_function(y_samples_vec[n], pred_vec) # true, predicted
+
+                    if(total_prediction_cost < min_cost):
+                        min_cost = total_prediction_cost
+                        min_sample = i
+                        #print(min_cost)
+                        #print(min_sample)
+
+                y[n] = y_samples_vec[n][min_sample]
+                #print(y[n])
+            #print(y)
         else:
             K_Q_x = self.kernel(self.test_x, self.train_x)
             K_x_Q = self.kernel(self.train_x, self.test_x)
