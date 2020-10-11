@@ -84,7 +84,7 @@ class Model():
                 "kernel":kernels.sklearn_best(), #kernels.sklearn_best2(),
                 "variance":1,
                 "correct_y_pred":False,
-                "model_preprocess_left_frac":0.1 }
+                "model_preprocess_left_frac":0.75 }
         for k in list(model_config_override.keys()):
             model_config[k] = model_config_override[k]
 
@@ -163,7 +163,7 @@ class Model():
         elif self.use_nystrom_skl:
             #y, std = self.fitted.predict(self.feature_map_nystroem.transform(self.test_x), return_std=True)
             #print(std)
-            num_samples = 100
+            num_samples = 1000
             y_samples_vec = self.fitted.sample_y(self.feature_map_nystroem.transform(self.test_x), num_samples, 42)
             #print(y_samples_vec.shape)
             #for n in range(0,len(self.test_x)): # for each point in test set
