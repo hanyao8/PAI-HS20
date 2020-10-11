@@ -1,0 +1,105 @@
+2020-10-11 16:54:39,218 - root - Begin logging for single training run
+2020-10-11 16:56:15,068 - root - Begin logging for single training run
+2020-10-11 16:57:03,055 - root - Begin logging for single training run
+2020-10-11 16:58:01,630 - root - Begin logging for single training run
+2020-10-11 16:58:03,756 - root - Begin logging for single training run
+2020-10-11 16:58:05,914 - root - Begin logging for single training run
+2020-10-11 16:58:08,351 - root - Begin logging for single training run
+2020-10-11 16:58:10,469 - root - Begin logging for single training run
+2020-10-11 16:58:12,925 - root - Begin logging for single training run
+2020-10-11 16:58:15,117 - root - Begin logging for single training run
+2020-10-11 16:58:17,718 - root - Begin logging for single training run
+2020-10-11 16:58:19,922 - root - Begin logging for single training run
+2020-10-11 16:58:22,142 - root - Begin logging for single training run
+2020-10-11 16:58:31,888 - root - Begin logging for single training run
+2020-10-11 16:58:31,895 - root - Using FITC
+2020-10-11 16:58:32,382 - root - (990,)
+2020-10-11 16:58:32,395 - root - (15,)
+2020-10-11 16:58:32,488 - root - Begin logging for single training run
+2020-10-11 16:58:32,495 - root - Using FITC
+2020-10-11 16:58:32,959 - root - (990,)
+2020-10-11 16:58:32,976 - root - (15,)
+2020-10-11 16:58:33,065 - root - Begin logging for single training run
+2020-10-11 16:58:33,073 - root - Using FITC
+2020-10-11 16:58:33,543 - root - (990,)
+2020-10-11 16:58:33,560 - root - (15,)
+2020-10-11 16:58:33,644 - root - Begin logging for single training run
+2020-10-11 16:58:33,652 - root - Using FITC
+2020-10-11 16:58:34,140 - root - (990,)
+2020-10-11 16:58:34,156 - root - (15,)
+2020-10-11 16:58:34,249 - root - Begin logging for single training run
+2020-10-11 16:58:34,258 - root - Using FITC
+2020-10-11 16:58:34,744 - root - (990,)
+2020-10-11 16:58:34,761 - root - (15,)
+2020-10-11 16:58:34,852 - root - Begin logging for single training run
+2020-10-11 16:58:34,862 - root - Using FITC
+2020-10-11 16:58:35,343 - root - (990,)
+2020-10-11 16:58:35,360 - root - (15,)
+2020-10-11 16:58:35,452 - root - Begin logging for single training run
+2020-10-11 16:58:35,462 - root - Using FITC
+2020-10-11 16:58:35,946 - root - (990,)
+2020-10-11 16:58:35,964 - root - (15,)
+2020-10-11 16:58:36,056 - root - Begin logging for single training run
+2020-10-11 16:58:36,067 - root - Using FITC
+2020-10-11 16:58:36,555 - root - (990,)
+2020-10-11 16:58:36,575 - root - (15,)
+2020-10-11 16:58:36,671 - root - Begin logging for single training run
+2020-10-11 16:58:36,683 - root - Using FITC
+2020-10-11 16:58:37,173 - root - (990,)
+2020-10-11 16:58:37,192 - root - (15,)
+2020-10-11 16:58:37,289 - root - Begin logging for single training run
+2020-10-11 16:58:37,302 - root - Using FITC
+2020-10-11 16:58:37,798 - root - (990,)
+2020-10-11 16:58:37,817 - root - (15,)
+2020-10-11 16:59:33,241 - root - Begin logging for single training run
+2020-10-11 16:59:33,255 - root - Using Nystrom
+2020-10-11 16:59:33,726 - root - (990,)
+2020-10-11 16:59:33,750 - root - (15,)
+2020-10-11 17:28:16,733 - root - Begin logging for single training run
+2020-10-11 17:28:16,748 - root - Using FITC
+2020-10-11 17:34:02,524 - root - Begin logging for single training run
+2020-10-11 17:34:02,543 - root - Using Nystrom
+2020-10-11 17:34:03,026 - root - (990,)
+2020-10-11 17:34:03,075 - root - (15,)
+2020-10-11 17:34:13,216 - root - Begin logging for single training run
+2020-10-11 17:34:13,231 - root - Using FITC
+2020-10-11 17:34:51,144 - root - Begin logging for single training run
+2020-10-11 17:34:51,160 - root - Using FITC
+2020-10-11 17:34:51,640 - root - (990,)
+2020-10-11 17:34:51,664 - root - (15,)
+2020-10-11 17:34:51,764 - root - Begin logging for single training run
+2020-10-11 17:34:51,783 - root - Using FITC
+2020-10-11 17:34:52,292 - root - (990,)
+2020-10-11 17:34:52,317 - root - (15,)
+2020-10-11 17:34:52,415 - root - Begin logging for single training run
+2020-10-11 17:34:52,437 - root - Using FITC
+2020-10-11 17:34:52,921 - root - (990,)
+2020-10-11 17:34:52,947 - root - (15,)
+2020-10-11 17:34:53,042 - root - Begin logging for single training run
+2020-10-11 17:34:53,060 - root - Using FITC
+2020-10-11 17:34:53,544 - root - (990,)
+2020-10-11 17:34:53,569 - root - (15,)
+2020-10-11 17:34:53,670 - root - Begin logging for single training run
+2020-10-11 17:34:53,689 - root - Using FITC
+2020-10-11 17:34:54,173 - root - (990,)
+2020-10-11 17:34:54,198 - root - (15,)
+2020-10-11 17:34:54,298 - root - Begin logging for single training run
+2020-10-11 17:34:54,318 - root - Using FITC
+2020-10-11 17:34:54,816 - root - (990,)
+2020-10-11 17:34:54,841 - root - (15,)
+2020-10-11 17:34:54,946 - root - Begin logging for single training run
+2020-10-11 17:34:54,964 - root - Using FITC
+2020-10-11 17:34:55,457 - root - (990,)
+2020-10-11 17:34:55,485 - root - (15,)
+2020-10-11 17:34:55,587 - root - Begin logging for single training run
+2020-10-11 17:34:55,607 - root - Using FITC
+2020-10-11 17:34:56,132 - root - (990,)
+2020-10-11 17:34:56,160 - root - (15,)
+2020-10-11 17:34:56,263 - root - Begin logging for single training run
+2020-10-11 17:34:56,284 - root - Using FITC
+2020-10-11 17:34:56,768 - root - (990,)
+2020-10-11 17:34:56,795 - root - (15,)
+2020-10-11 17:34:56,898 - root - Begin logging for single training run
+2020-10-11 17:34:56,918 - root - Using FITC
+2020-10-11 17:34:57,420 - root - (990,)
+2020-10-11 17:34:57,448 - root - (15,)

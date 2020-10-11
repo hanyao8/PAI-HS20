@@ -257,7 +257,7 @@ class Model():
             
         elif self.use_fitc:
             logging.info("Using FITC")
-            self.z = self.train_x[:self.q] #??
+            self.z = train_x[np.random.choice(train_x.shape[0], 100, replace=False), :]
 
             K_qq = self.kernel(self.z, self.z)
             self.K_qn = self.kernel(self.z, self.train_x)
@@ -276,7 +276,7 @@ class Model():
         
     def likelihood(self):
         if self.use_skit_learn:
-            log_likelihood = log_marginal_likelihood()
+            log_likelihood = self.gpr.log_marginal_likelihood()
             
         elif self.use_fitc:
             log_likelihood = (-0.5 * np.log(np.linalg.det(self.KK + self.A))
