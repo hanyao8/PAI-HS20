@@ -6,6 +6,7 @@ from scipy.stats import norm as gaussian
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel,RBF,Matern
+from sklearn.kernel_approximation import Nystroem
 
 import kernels
 import utils
@@ -77,12 +78,13 @@ class Model():
         """
         model_config = {
                 "use_skit_learn":False, 
-                "use_nystrom":True,
+                "use_nystrom":False,
+                "use_nystrom_skl":True,
                 "nystrom_q":100,
-                "kernel":kernels.sklearn_best(),
+                "kernel":kernels.sklearn_best(), #kernels.sklearn_best2(),
                 "variance":1,
                 "correct_y_pred":False,
-                "model_preprocess_left_frac":0.75 }
+                "model_preprocess_left_frac":0.1 }
         for k in list(model_config_override.keys()):
             model_config[k] = model_config_override[k]
 
@@ -94,6 +96,7 @@ class Model():
         #self.THRESHOLD = THRESHOLD
         self.variance = model_config["variance"]
         self.use_skit_learn = model_config["use_skit_learn"]
+        self.use_nystrom_skl = model_config["use_nystrom_skl"]
         self.use_nystrom = model_config["use_nystrom"]
         self.q = model_config["nystrom_q"]
 
@@ -157,6 +160,13 @@ class Model():
         
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
+        elif self.use_nystrom_skl:
+            y, std = self.fitted.predict(self.feature_map_nystroem.transform(self.test_x), return_std=True)
+            print(std)
+            for i in range(0,len(y)):
+                if(y[i] < 0.35): y[i] = y[i]*(1-2*std[i])
+                elif(y[i] < 0.5): y[i] = y[i]*(1+10*std[i])
+                else: y[i] = y[i]*(1+2*std[i])
         else:
             K_Q_x = self.kernel(self.test_x, self.train_x)
             K_x_Q = self.kernel(self.train_x, self.test_x)
@@ -180,7 +190,7 @@ class Model():
             return y_mean_corrected
 
         y = np.clip(y,a_min=0,a_max=1)
-        y = np.sqrt(y)
+        #y = np.sqrt(y)
         return y
 
     def fit_model(self, train_x, train_y):
@@ -197,8 +207,20 @@ class Model():
         
         self.n = np.shape(self.train_x)[0]
         if self.use_skit_learn:
-            self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42)
+            self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42,n_restarts_optimizer=5)
             self.fitted = self.gpr.fit( self.train_x , self.train_y)
+        elif self.use_nystrom_skl:
+            logging.info("Using use_nystrom_skl")
+            self.feature_map_nystroem = Nystroem(
+                #kernel=self.kernel, # "rbf"
+                gamma=.2,
+                random_state=42,
+                n_components=10)
+            self.data_transformed = self.feature_map_nystroem.fit_transform(self.train_x)
+            print(self.data_transformed.shape)
+            self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42,n_restarts_optimizer=0)
+            self.fitted = self.gpr.fit( self.data_transformed , self.train_y)
+            logging.info("data fitted")
         else:
             if self.use_nystrom:
                 logging.info("Using Nystrom")
