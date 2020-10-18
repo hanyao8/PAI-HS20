@@ -309,23 +309,29 @@ class cv_eval():
         self.df = df 
         
         df_left = df[df['x0']<-0.5]
-        df_left = df_left.sample(frac=self.cv_preprocess_left_frac,random_state=42)
         df_right = df[df['x0']>-0.5]
+
+        if self.cv_preprocess_left_frac < 0.999:
+            df_left = df_left.sample(frac=self.cv_preprocess_left_frac,random_state=42)
+
         self.df_left = df_left
         self.df_right = df_right
     
     def get_split(self, i):
         ''' i index of the CV split'''
         print("i=%d"%i)
-        df_train_list = [self.df_left]
-        df_right_shuffle = self.df_right.sample(frac=1,random_state=42)
-        df_right_splits = np.array_split(df_right_shuffle,self.K_cv)
-        for j in range(0,self.K_cv):
-            if j!=i:
-                df_train_list.append(df_right_splits[j])
-        #print(len(df_train_list))
-        df_train = pd.concat(df_train_list)
-        df_val = df_right_splits[i]
+        if self.df_right.shape[0]>0:
+            df_train_list = [self.df_left]
+            df_right_shuffle = self.df_right.sample(frac=1,random_state=42)
+            df_right_splits = np.array_split(df_right_shuffle,self.K_cv)
+            for j in range(0,self.K_cv):
+                if j!=i:
+                    df_train_list.append(df_right_splits[j])
+            df_train = pd.concat(df_train_list)
+            df_val = df_right_splits[i]
+        else:
+            df_train = self.df_left.sample(frac=1-1/self.K_cv,random_state=42)
+            df_val = self.df_left.drop(df_train.index)
 
         self.X_train = df_train[['x0','x1']].values
         self.y_train = df_train['y'].values
@@ -333,8 +339,8 @@ class cv_eval():
         self.y_val = df_val['y'].values
     
     def run_cross_validation(self, train_x, train_y):
-        if self.cv_preprocess_left_frac < 0.999:
-            self.preprocess(train_x, train_y)
+        self.preprocess(train_x, train_y)
+
         val_cost_array = np.array([])
         marg_log_likelihood_array = np.array([])
         self.models = []
@@ -362,7 +368,7 @@ class cv_eval():
             print("\n")
             
         print(marg_log_likelihood_array)
-        return val_cost_array
+        return val_cost_array,marg_log_likelihood_array
 
 
 
@@ -389,7 +395,7 @@ def logging_setup():
     logging_path = os.path.join(*[project_dir,'train.log'])
     logging.basicConfig(filename=logging_path, filemode='a',\
             format='%(asctime)s - %(name)s - %(message)s', level=logging.INFO)
-    logging.info("Begin logging for single training run")
+    #logging.info("Begin logging for single training run")
     root = logging.getLogger()
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
