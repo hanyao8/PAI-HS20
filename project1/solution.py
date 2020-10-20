@@ -6,6 +6,7 @@ from scipy.stats import norm as gaussian
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel,RBF,Matern
+from sklearn.kernel_approximation import Nystroem
 
 import kernels
 import utils
@@ -80,10 +81,11 @@ class Model():
         """
         model_config = {
                 "use_skit_learn":False, 
-                "use_nystrom":True,
+                "use_nystrom":False,
+                "use_nystrom_skl":True,
                 "use_fitc" : False,
                 "nystrom_q":100,
-                "kernel":kernels.sklearn_best(),
+                "kernel":kernels.sklearn_best(), #kernels.sklearn_best2(),
                 "variance":1,
                 "correct_y_pred":False,
                 "model_preprocess_left_frac":0.75 }
@@ -98,6 +100,7 @@ class Model():
         #self.THRESHOLD = THRESHOLD
         self.variance = model_config["variance"]
         self.use_skit_learn = model_config["use_skit_learn"]
+        self.use_nystrom_skl = model_config["use_nystrom_skl"]
         self.use_nystrom = model_config["use_nystrom"]
         self.use_fitc = model_config["use_fitc"]
         self.q = model_config["nystrom_q"]
@@ -170,6 +173,31 @@ class Model():
         ### Get prediction
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
+        elif self.use_nystrom_skl:
+            #y, std = self.fitted.predict(self.feature_map_nystroem.transform(self.test_x), return_std=True)
+            #print(std)
+            num_samples = 1000
+            y_samples_vec = self.fitted.sample_y(self.feature_map_nystroem.transform(self.test_x), num_samples, 42)
+            #print(y_samples_vec.shape)
+            #for n in range(0,len(self.test_x)): # for each point in test set
+
+            y = np.repeat(1.0, len(self.test_x))
+            for n in range(0,len(self.test_x)): # for each data point in test set
+                min_cost = 99999999999
+                min_sample = 0
+                for i in range(0, num_samples): # evaluate all possible predictions 
+                    pred_vec = np.repeat(y_samples_vec[n][i], num_samples)
+                    total_prediction_cost = cost_function(y_samples_vec[n], pred_vec) # true, predicted
+
+                    if(total_prediction_cost < min_cost):
+                        min_cost = total_prediction_cost
+                        min_sample = i
+                        #print(min_cost)
+                        #print(min_sample)
+
+                y[n] = y_samples_vec[n][min_sample]
+                #print(y[n])
+            #print(y)
         elif self.use_fitc:
             K_q_star = self.kernel(self.z, self.test_x)
             K_star_star = self.kernel(self.test_x, self.test_x)
@@ -205,7 +233,7 @@ class Model():
             return y_mean_corrected
 
         y = np.clip(y,a_min=0,a_max=1)
-        y = np.sqrt(y)
+        #y = np.sqrt(y)
         return y
 
     def fit_model(self, train_x, train_y):
@@ -225,8 +253,20 @@ class Model():
         
         ### Preform fit
         if self.use_skit_learn:
-            self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42)
+            self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42,n_restarts_optimizer=5)
             self.fitted = self.gpr.fit( self.train_x , self.train_y)
+        elif self.use_nystrom_skl:
+            logging.info("Using use_nystrom_skl")
+            self.feature_map_nystroem = Nystroem(
+                #kernel=self.kernel, # "rbf"
+                gamma=.2,
+                random_state=42,
+                n_components=10)
+            self.data_transformed = self.feature_map_nystroem.fit_transform(self.train_x)
+            print(self.data_transformed.shape)
+            self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42,n_restarts_optimizer=0)
+            self.fitted = self.gpr.fit( self.data_transformed , self.train_y)
+            logging.info("data fitted")
         elif self.use_nystrom:
             logging.info("Using Nystrom")
             K_nq = self.kernel(self.train_x,self.train_x[:self.q])
