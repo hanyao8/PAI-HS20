@@ -80,8 +80,8 @@ class Model():
             TODO: enter your code here
         """
         model_config = {
-                "use_skit_learn":False, 
-                "use_nystrom":True,
+                "use_skit_learn":True, 
+                "use_nystrom":False,
                 "use_nystrom_skl":False,
                 "use_fitc" : False,
                 "nystrom_q":100,
@@ -90,7 +90,7 @@ class Model():
                 "kernel":kernels.sklearn_tunable2(),
                 "variance":10**(0.5),
                 "correct_y_pred":True,
-                "model_preprocess_left_frac":0.5}
+                "model_preprocess_left_frac":0.05}
 
         for k in list(model_config_override.keys()):
             model_config[k] = model_config_override[k]
@@ -209,7 +209,7 @@ class Model():
         ### Correct prediction
         if self.correct_y_pred:
             print("starting y correction")
-            num_samples = 50
+            num_samples = 250
             if self.use_skit_learn:
                 y_samples_vec = self.fitted.sample_y(self.test_x, num_samples, 42)
             elif self.use_nystrom_skl:
