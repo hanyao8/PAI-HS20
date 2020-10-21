@@ -81,14 +81,17 @@ class Model():
         """
         model_config = {
                 "use_skit_learn":False, 
-                "use_nystrom":False,
-                "use_nystrom_skl":True,
+                "use_nystrom":True,
+                "use_nystrom_skl":False,
                 "use_fitc" : False,
                 "nystrom_q":100,
-                "kernel":kernels.sklearn_best(), #kernels.sklearn_best2(),
-                "variance":1,
-                "correct_y_pred":False,
-                "model_preprocess_left_frac":0.75 }
+                #"kernel":kernels.sklearn_best(),
+                #"kernel":kernels.sklearn_best2(),
+                "kernel":kernels.sklearn_tunable2(),
+                "variance":10**(0.5),
+                "correct_y_pred":True,
+                "model_preprocess_left_frac":0.5}
+
         for k in list(model_config_override.keys()):
             model_config[k] = model_config_override[k]
 
@@ -169,35 +172,12 @@ class Model():
             TODO: enter your code here
         """
         self.test_x = test_x  
-        
         ### Get prediction
         if self.use_skit_learn:
             y = self.fitted.predict(self.test_x)
+            print("sklearn predict finished")
         elif self.use_nystrom_skl:
-            #y, std = self.fitted.predict(self.feature_map_nystroem.transform(self.test_x), return_std=True)
-            #print(std)
-            num_samples = 1000
-            y_samples_vec = self.fitted.sample_y(self.feature_map_nystroem.transform(self.test_x), num_samples, 42)
-            #print(y_samples_vec.shape)
-            #for n in range(0,len(self.test_x)): # for each point in test set
-
-            y = np.repeat(1.0, len(self.test_x))
-            for n in range(0,len(self.test_x)): # for each data point in test set
-                min_cost = 99999999999
-                min_sample = 0
-                for i in range(0, num_samples): # evaluate all possible predictions 
-                    pred_vec = np.repeat(y_samples_vec[n][i], num_samples)
-                    total_prediction_cost = cost_function(y_samples_vec[n], pred_vec) # true, predicted
-
-                    if(total_prediction_cost < min_cost):
-                        min_cost = total_prediction_cost
-                        min_sample = i
-                        #print(min_cost)
-                        #print(min_sample)
-
-                y[n] = y_samples_vec[n][min_sample]
-                #print(y[n])
-            #print(y)
+            y, std = self.fitted.predict(self.feature_map_nystroem.transform(self.test_x), return_std=True)
         elif self.use_fitc:
             K_q_star = self.kernel(self.z, self.test_x)
             K_star_star = self.kernel(self.test_x, self.test_x)
@@ -208,32 +188,59 @@ class Model():
             vars_val = np.diag(cov)
             y = (np.random.multivariate_normal(means.ravel(), cov, 1)).flatten() #sample from the multivar normal
             logging.info(str(y.shape))
-
         else: 
             K_star_x = self.kernel(self.test_x, self.train_x)
             K_x_star = self.kernel(self.train_x, self.test_x)
             K_star_star = self.kernel(self.test_x, self.test_x)
             means = K_star_x.dot(self.K_x_x_inv).dot(self.train_y)
+            mu_nys = means.ravel()
+            print("means:")
+            print(mu_nys)
             cov = K_star_star - K_star_x.dot(self.K_x_x_inv).dot(K_x_star)
             cov = (cov+cov.transpose())/2
             vars_val = np.diag(cov)
-            #print(means)
-            #print(cov)
-            y = (np.random.multivariate_normal(means.ravel(), cov, 1)).flatten() #sample from the multivar normal
+            print("\n vars_val")
+            print(vars_val)
+
+            #y = (np.random.multivariate_normal(means.ravel(), cov, 1)).flatten() #sample from the multivar normal
             #print(y.shape)
-            logging.info(str(y.shape))
-            #print(y)
+            logging.info(str(mu_nys.shape))
         
         ### Correct prediction
         if self.correct_y_pred:
-        #y_correction vectorization in dev
-            y_mean_corrected = np.array([])
-            for i in range(0,len(self.test_x)):
-                y_mean_corrected = np.append(y_mean_corrected,self.correct_y(y_mean,y_std))
-            return y_mean_corrected
+            print("starting y correction")
+            num_samples = 50
+            if self.use_skit_learn:
+                y_samples_vec = self.fitted.sample_y(self.test_x, num_samples, 42)
+            elif self.use_nystrom_skl:
+                y_samples_vec = self.fitted.sample_y(self.feature_map_nystroem.transform(self.test_x), num_samples, 42)
+            elif self.use_nystrom:
+                y_samples_vec = np.zeros((self.test_x.shape[0],num_samples))
+                for n in range(0,self.test_x.shape[0]):
+                    y_samples_vec[n] = np.random.normal(mu_nys[n],np.sqrt(vars_val[n]),num_samples)
+            y_samples_vec = np.clip(y_samples_vec,a_min=0,a_max=1)
+            print("\n y samples vec stuff")
+            print(np.shape(y_samples_vec))
+            print(y_samples_vec)
+            print(np.min(y_samples_vec))
 
+            y = np.repeat(1.0, len(self.test_x))
+            for n in range(0,len(self.test_x)): # for each data point in test set
+                min_cost = 99999999999
+                min_sample = 0
+                for i in range(0, num_samples): # evaluate all possible predictions 
+                    pred_vec = np.repeat(y_samples_vec[n][i], num_samples)
+                    total_prediction_cost = cost_function(y_samples_vec[n], pred_vec) # true, predicted
+                    if(total_prediction_cost < min_cost):
+                        min_cost = total_prediction_cost
+                        min_sample = i
+                y[n] = y_samples_vec[n][min_sample]
+
+        print("returning y")
         y = np.clip(y,a_min=0,a_max=1)
-        #y = np.sqrt(y)
+
+        print("final y:")
+        print(y)
         return y
 
     def fit_model(self, train_x, train_y):
@@ -253,8 +260,15 @@ class Model():
         
         ### Preform fit
         if self.use_skit_learn:
+            print("start model fit")
             self.gpr = GaussianProcessRegressor(kernel=self.kernel,copy_X_train=False,random_state=42,n_restarts_optimizer=5)
             self.fitted = self.gpr.fit( self.train_x , self.train_y)
+
+            print("sklearn model fitted")
+            print("theta")
+            print(self.fitted.kernel_)
+            print(self.fitted.kernel_.theta)
+
         elif self.use_nystrom_skl:
             logging.info("Using use_nystrom_skl")
             self.feature_map_nystroem = Nystroem(
@@ -271,22 +285,31 @@ class Model():
             logging.info("Using Nystrom")
             K_nq = self.kernel(self.train_x,self.train_x[:self.q])
             K_qq = self.kernel(self.train_x[:self.q],self.train_x[:self.q])
-            K_qq_eigendec = np.linalg.eig(K_qq)
+            K_qq_eigendec = np.linalg.eigh(K_qq)
             Lambda_qq = np.diag(K_qq_eigendec[0])
             U_qq = K_qq_eigendec[1]
 
-            #For the minor components- U_qq contains some complex columns
-            #if we don't do PCA
-            p = utils.pca_find_p(K_qq_eigendec[0],pca_thresh=(1-1e-2))
-            self.K_qq_eigendec = K_qq_eigendec
-            self.p = p
-            Lambda_pp = np.diag(K_qq_eigendec[0][:p+1])
-            U_qp = U_qq[:,:p+1]
+            print("\n Lambda_qq, U_qq")
+            print(Lambda_qq)
+            print(U_qq)
 
-            Q = K_nq.dot(U_qp).dot(np.sqrt(np.linalg.inv(Lambda_pp)))
-            self.U_qp = U_qp
-            self.K_nq = K_nq
-            self.Lambda_pp = Lambda_pp
+            do_pca = False
+            if do_pca:
+                #For the minor components- U_qq contains some complex columns
+                #if we don't do PCA
+                p = utils.pca_find_p(K_qq_eigendec[0],pca_thresh=(1-0.05))
+                print("pca p=%d"%p)
+                self.K_qq_eigendec = K_qq_eigendec
+                self.p = p
+                Lambda_pp = np.diag(K_qq_eigendec[0][:p+1])
+                U_qp = U_qq[:,:p+1]
+    
+                Q = K_nq.dot(U_qp).dot(np.sqrt(np.linalg.inv(Lambda_pp)))
+                self.U_qp = U_qp
+                self.K_nq = K_nq
+                self.Lambda_pp = Lambda_pp
+            else:
+                 Q = K_nq.dot(U_qq).dot(np.sqrt(np.linalg.inv(Lambda_qq)))               
 
             self.Q = Q
 
