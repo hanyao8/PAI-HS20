@@ -125,7 +125,6 @@ class BayesianLayer(torch.nn.Module):
 
 
     def forward(self, inputs):
-        KL_sum=0
 	
 	sigma = torch.log(1 + torch.exp(self.weight_logsigma)) 
         eps = torch.randn_like(sigma)
@@ -139,9 +138,8 @@ class BayesianLayer(torch.nn.Module):
             bias = None
 	
 	outputs = inputs @ w + b
-	KL_sum += self.kl_divergence()
 	
-        return outputs
+        return output
 
 
     def kl_divergence(self):
@@ -189,13 +187,19 @@ class BayesNet(torch.nn.Module):
     def predict_class_probs(self, x, num_forward_passes=10):
         assert x.shape[1] == 28**2
         batch_size = x.shape[0]
-
+	
         # TODO: make n random forward passes
         # compute the categorical softmax probabilities
         # marginalize the probabilities over the n forward passes
-
-        assert probs.shape == (batch_size, 10)
-        return probs
+        probs = torch.zeros(batch_size, 10)
+	n_pass = trange(num_forward_passes)
+	for fpass in n_pass:
+	    out =  self.forward(x)
+	    probs += out
+	assert probs.shape == (batch_size, 10)
+        
+	probs = probs/ num_forward_passes
+	return probs
 
 
     def kl_loss(self):
@@ -203,6 +207,11 @@ class BayesNet(torch.nn.Module):
         Computes the KL divergence loss for all layers.
         '''
         # TODO: enter your code here
+	kl_sum = 0.0
+	for layer in layers:
+	    kl_sum += layer.kl_divergence()
+	return kl_sum #TODO does it work or should we have two outputs to the forward Bayesian Layer??
+	   
 
 def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_interval=100):
     '''
@@ -220,10 +229,11 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
             model.zero_grad()
             y_pred = model(batch_x)
             loss = criterion(y_pred, batch_y)
-            #if type(model) == BayesNet:
+            if type(model) == BayesNet:
                 # BayesNet implies additional KL-loss.
-                # TODO: enter your code here
-            loss.backward()
+            	kl = model.kl_loss #accumulated loss
+		loss = loss + kl # reconstruction_error + Kl divergence 
+	    loss.backward()
             optimizer.step()
 
             if k % pbar_update_interval == 0:
