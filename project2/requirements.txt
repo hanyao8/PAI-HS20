@@ -1,11 +1,11 @@
 numpy==1.19.1
 scipy==1.5.1
 pyarmor==6.3.3
-#cryptography==3.0
+cryptography==3.0
 torch==1.6
 torchvision
 matplotlib
 sklearn
-#tqdm
-tensorflow
-tensorflow-probability
+tqdm
+#tensorflow
+#tensorflow-probability

@@ -98,7 +98,7 @@ class Densenet(torch.nn.Module):
         probs = F.softmax(self.forward(x), dim=1)
         return probs
 
-
+"""
 class BayesianLayer(torch.nn.Module):
     '''
     Module implementing a single Bayesian feedforward layer.
@@ -196,7 +196,7 @@ class BayesNet(torch.nn.Module):
         Computes the KL divergence loss for all layers.
         '''
         # TODO: enter your code here
-
+"""
 
 def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_interval=100):
     '''
@@ -214,7 +214,7 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
             model.zero_grad()
             y_pred = model(batch_x)
             loss = criterion(y_pred, batch_y)
-            if type(model) == BayesNet:
+            #if type(model) == BayesNet:
                 # BayesNet implies additional KL-loss.
                 # TODO: enter your code here
             loss.backward()
@@ -321,7 +321,7 @@ def main(test_loader=None, private_test=False):
     batch_size = 128  # Try playing around with this
     print_interval = 100
     learning_rate = 5e-4  # Try playing around with this
-    model_type = "bayesnet"  # Try changing this to "densenet" as a comparison
+    model_type = "densenet"  # Try changing this to "densenet" as a comparison
     extended_evaluation = False  # Set this to True for additional model evaluation
 
     dataset_train = load_rotated_mnist()
