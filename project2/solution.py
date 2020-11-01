@@ -98,7 +98,6 @@ class Densenet(torch.nn.Module):
         probs = F.softmax(self.forward(x), dim=1)
         return probs
 
-"""
 class BayesianLayer(torch.nn.Module):
     '''
     Module implementing a single Bayesian feedforward layer.
@@ -112,11 +111,10 @@ class BayesianLayer(torch.nn.Module):
         self.output_dim = output_dim
         self.use_bias = bias
 
-        # TODO: enter your code here
-        #self.prior_mu = ?
-        #self.prior_sigma = ?
-        #self.weight_mu = nn.?
-        #self.weight_logsigma = ?
+        self.prior_mu = 0
+        self.prior_sigma = 1
+        self.weight_mu = nn.parameter(torch.FloatTensor(input_dim, output_dim).normal_(mean=0, std=0.001))
+        self.weight_logsigma = nn.Parameter(torch.FloatTensor(input_dim, output_dim).normal_(mean=-2, std=0.001))
 
         if self.use_bias:
             self.bias_mu = nn.Parameter(torch.zeros(output_dim))
@@ -127,15 +125,23 @@ class BayesianLayer(torch.nn.Module):
 
 
     def forward(self, inputs):
-        # TODO: enter your code here
+        KL_sum=0
+	
+	sigma = torch.log(1 + torch.exp(self.weight_logsigma)) 
+        eps = torch.randn_like(sigma)
+        self.w = self.weight_mu + (eps * sigma)
 
         if self.use_bias:
-            # TODO: enter your code here
-        else:
+       	    sigma = torch.log(1 + torch.exp(self.bias_logsigma))
+            eps = torch.randn_like(sigma)
+            self.b = self.bias_mu + (eps * sigma)
+	else:
             bias = None
-
-        # TODO: enter your code here
-        # return ?
+	
+	outputs = inputs @ w + b
+	KL_sum += self.kl_divergence()
+	
+        return outputs
 
 
     def kl_divergence(self):
@@ -153,8 +159,9 @@ class BayesianLayer(torch.nn.Module):
         Computes the KL divergence between one Gaussian posterior
         and the Gaussian prior.
         '''
-
-        # TODO: enter your code here
+	log_prior = torch.distributions.Normal(self.prior_mu, self.prior_sigma).log_prob(self.w) 
+	log_theta_q = torch.distributions.Normal(self.weight_mu, torch.log(1 + torch.exp( self.weight_logsigma))).log_prob(self.w) 
+	kl = (log_theta_q - log_prior).sum() #TODO divided by something?
 
         return kl
 
@@ -196,7 +203,6 @@ class BayesNet(torch.nn.Module):
         Computes the KL divergence loss for all layers.
         '''
         # TODO: enter your code here
-"""
 
 def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_interval=100):
     '''
