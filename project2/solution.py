@@ -105,14 +105,18 @@ class BayesianLayer(torch.nn.Module):
     variational inference. It keeps prior and posterior weights
     (and biases) and uses the reparameterization trick for sampling.
     '''
-    def __init__(self, input_dim, output_dim, bias=True):
+    def __init__(self, input_dim, output_dim, bias=True, prior_mix=True):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.use_bias = bias
 
         self.prior_mu = 0
-        self.prior_sigma = 1
+        self.prior_sigma = 10
+
+        self.prior_mix = prior_mix
+        self.prior_mix_coef = 0.5
+
         self.weight_mu = nn.Parameter(torch.FloatTensor(input_dim, output_dim).normal_(mean=0, std=0.001))
         self.weight_logsigma = nn.Parameter(torch.FloatTensor(input_dim, output_dim).normal_(mean=-2, std=0.001))
 
@@ -157,7 +161,12 @@ class BayesianLayer(torch.nn.Module):
         Computes the KL divergence between one Gaussian posterior
         and the Gaussian prior.
         '''
-        log_prior = torch.distributions.Normal(self.prior_mu, self.prior_sigma).log_prob(self.w) 
+        if self.prior_mix:
+            log_prior1 = torch.distributions.Normal(self.prior_mu, self.prior_sigma).log_prob(self.w)
+            log_prior2 = torch.distributions.Normal(self.prior_mu, self.prior_sigma/10 ).log_prob(self.w)
+            log_prior = torch.log( self.prior_mix_coef*torch.exp(log_prior1) + (1-self.prior_mix_coef)*torch.exp(log_prior2) )
+        else:
+            log_prior = torch.distributions.Normal(self.prior_mu, self.prior_sigma).log_prob(self.w)
         log_theta_q = torch.distributions.Normal(self.weight_mu, torch.log(1 + torch.exp( self.weight_logsigma))).log_prob(self.w) 
         kl = (log_theta_q - log_prior).sum() #TODO divided by something?
 
@@ -208,12 +217,12 @@ class BayesNet(torch.nn.Module):
         # TODO: enter your code here
         kl_loss = self.net[0][0].kl_divergence()
         for i in range(1,1+self.num_layers):
-            print(self.net)
-            print(self.net[0])
+            #print(self.net)
+            #print(self.net[0])
             #print(model.net[0].kl_divergence())
-            print(self.net[0][0])
-            print((self.net[0][0]).input_dim)
-            print((self.net[0][0]).kl_divergence())
+            #print(self.net[0][0])
+            #print((self.net[0][0]).input_dim)
+            #print((self.net[0][0]).kl_divergence())
             kl_loss = kl_loss + (self.net[i][0]).kl_divergence()
         kl_loss = kl_loss + (self.net[-1]).kl_divergence()
         
@@ -243,13 +252,18 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
             if type(model) == BayesNet:
                 # BayesNet implies additional KL-loss.
                 kl = model.kl_loss() #accumulated loss
-                loss = loss + kl/num_batches # reconstruction_error + Kl divergence 
+                #loss = loss + kl/num_batches # reconstruction_error + Kl divergence 
+                loss = loss + (2**((num_epochs-i)*num_batches-k-1))/((2**(num_epochs*num_batches))-1)*kl
             loss.backward()
             optimizer.step()
 
             if k % pbar_update_interval == 0:
                 acc = (model(batch_x).argmax(axis=1) == batch_y).sum().float()/(len(batch_y))
                 pbar.set_postfix(loss=loss.item(), acc=acc.item())
+
+        if acc>0.8:
+            break
+
 
 
 def evaluate_model(model, model_type, test_loader, batch_size, extended_eval, private_test):
@@ -344,10 +358,10 @@ def evaluate_model(model, model_type, test_loader, batch_size, extended_eval, pr
 
 
 def main(test_loader=None, private_test=False):
-    num_epochs = 1 # You might want to adjust this
+    num_epochs = 10 # You might want to adjust this
     batch_size = 128  # Try playing around with this
     print_interval = 100
-    learning_rate = 5e-4  # Try playing around with this
+    learning_rate = 5e-3  # Try playing around with this
     model_type = "bayesnet"  # Try changing this to "densenet" as a comparison
     extended_evaluation = False  # Set this to True for additional model evaluation
 
@@ -356,9 +370,9 @@ def main(test_loader=None, private_test=False):
                                                shuffle=True, drop_last=True)
 
     if model_type == "bayesnet":
-        model = BayesNet(input_size=784, num_layers=2, width=100)
+        model = BayesNet(input_size=784, num_layers=2, width=30)
     elif model_type == "densenet":
-        model = Densenet(input_size=784, num_layers=2, width=100)
+        model = Densenet(input_size=784, num_layers=2, width=10)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     train_network(model, optimizer, train_loader, num_epochs=num_epochs, pbar_update_interval=print_interval)
