@@ -230,6 +230,10 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
     '''
     criterion = torch.nn.CrossEntropyLoss() # always used in this assignment
 
+    num_batches = 0
+    for k, (batch_x, batch_y) in enumerate(train_loader):
+        num_batches+=1
+
     pbar = trange(num_epochs)
     for i in pbar:
         for k, (batch_x, batch_y) in enumerate(train_loader):
@@ -239,7 +243,7 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
             if type(model) == BayesNet:
                 # BayesNet implies additional KL-loss.
                 kl = model.kl_loss() #accumulated loss
-                loss = loss + kl # reconstruction_error + Kl divergence 
+                loss = loss + kl/num_batches # reconstruction_error + Kl divergence 
             loss.backward()
             optimizer.step()
 
@@ -340,11 +344,11 @@ def evaluate_model(model, model_type, test_loader, batch_size, extended_eval, pr
 
 
 def main(test_loader=None, private_test=False):
-    num_epochs = 100 # You might want to adjust this
+    num_epochs = 1 # You might want to adjust this
     batch_size = 128  # Try playing around with this
     print_interval = 100
     learning_rate = 5e-4  # Try playing around with this
-    model_type = "densenet"  # Try changing this to "densenet" as a comparison
+    model_type = "bayesnet"  # Try changing this to "densenet" as a comparison
     extended_evaluation = False  # Set this to True for additional model evaluation
 
     dataset_train = load_rotated_mnist()
