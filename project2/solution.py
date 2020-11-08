@@ -95,6 +95,7 @@ class Densenet(torch.nn.Module):
 
 
     def predict_class_probs(self, x):
+        #x = x.cuda()
         probs = F.softmax(self.forward(x), dim=1)
         return probs
 
@@ -141,7 +142,11 @@ class BayesianLayer(torch.nn.Module):
         else:
             bias = None
 
+        #self.w = self.w.cuda() 
+        #self.b = self.b.cuda()
+        #inputs = inputs.cuda()  
         outputs = inputs @ self.w + self.b
+        #outputs = outputs.cuda() 
 
         return outputs
 
@@ -195,6 +200,7 @@ class BayesNet(torch.nn.Module):
 
     def predict_class_probs(self, x, num_forward_passes=10):
         assert x.shape[1] == 28**2
+        #x = x.cuda()
         batch_size = x.shape[0]
 
         # TODO: make n random forward passes
@@ -248,12 +254,22 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
         for k, (batch_x, batch_y) in enumerate(train_loader):
             model.zero_grad()
             y_pred = model(batch_x)
+            #y_pred = y_pred.cuda()
+            #batch_y = batch_y.cuda()
             loss = criterion(y_pred, batch_y)
             if type(model) == BayesNet:
                 # BayesNet implies additional KL-loss.
                 kl = model.kl_loss() #accumulated loss
                 #loss = loss + kl/num_batches # reconstruction_error + Kl divergence 
-                loss = loss + (2**((num_epochs-i)*num_batches-k-1))/((2**(num_epochs*num_batches))-1)*kl
+                # values for layers2 / width 30
+                factor = (2**((num_epochs-i)*num_batches-k-1))/((2**(num_epochs*num_batches))-1) # Accuracy = 0.826 ECE = 0.079
+                factor = (0.5**i) # Accuracy = 0.108 .. ECE = 0.009
+                factor = 0 # Accuracy = 0.907 ECE = 0.072
+                factor = 0.01 # Accuracy = 0.105 ECE = 0.029
+                factor = 0.0001 # Accuracy = 0.112 ECE = 0.004
+                factor = 0.000001 * (0.7**i) # Accuracy = 0.923 ECE = 0.036
+                factor = 0.00001 * (0.9**i)
+                loss = loss + factor*kl
             loss.backward()
             optimizer.step()
 
@@ -261,8 +277,8 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
                 acc = (model(batch_x).argmax(axis=1) == batch_y).sum().float()/(len(batch_y))
                 pbar.set_postfix(loss=loss.item(), acc=acc.item())
 
-        if acc>0.8:
-            break
+        #if acc>0.8:
+        #    break
 
 
 
@@ -276,10 +292,13 @@ def evaluate_model(model, model_type, test_loader, batch_size, extended_eval, pr
     on the predictive confidences.
     '''
     accs_test = []
-    probs = torch.tensor([])
-    labels = torch.tensor([]).long()
+    probs = torch.tensor([])#.cuda()
+    labels = torch.tensor([]).long()#.cuda()
     for batch_x, batch_y in test_loader:
+        #batch_x = batch_x.cuda()
+        #batch_y = batch_y.cuda()
         pred = model.predict_class_probs(batch_x)
+        #pred = pred.cuda()
         probs = torch.cat((probs, pred))
         labels = torch.cat((labels, batch_y))
         acc = (pred.argmax(axis=1) == batch_y).sum().float().item()/(len(batch_y))
@@ -287,12 +306,12 @@ def evaluate_model(model, model_type, test_loader, batch_size, extended_eval, pr
 
     if not private_test:
         acc_mean = np.mean(accs_test)
-        ece_mean = ece(probs.detach().numpy(), labels.numpy())
+        ece_mean = ece(probs.detach().cpu().numpy(), labels.cpu().numpy())
         print(f"Model type: {model_type}\nAccuracy = {acc_mean:.3f}\nECE = {ece_mean:.3f}")
     else:
         print("Using private test set.")
 
-    final_probs = probs.detach().numpy()
+    final_probs = probs.detach().cpu().numpy()
 
     if extended_eval:
         confidences = []
@@ -358,10 +377,10 @@ def evaluate_model(model, model_type, test_loader, batch_size, extended_eval, pr
 
 
 def main(test_loader=None, private_test=False):
-    num_epochs = 10 # You might want to adjust this
+    num_epochs = 5 # You might want to adjust this
     batch_size = 128  # Try playing around with this
     print_interval = 100
-    learning_rate = 5e-3  # Try playing around with this
+    learning_rate = 5e-3  # Try playing around with this, default is 5e-3
     model_type = "bayesnet"  # Try changing this to "densenet" as a comparison
     extended_evaluation = False  # Set this to True for additional model evaluation
 
@@ -370,11 +389,16 @@ def main(test_loader=None, private_test=False):
                                                shuffle=True, drop_last=True)
 
     if model_type == "bayesnet":
-        model = BayesNet(input_size=784, num_layers=2, width=30)
+        model = BayesNet(input_size=784, num_layers=2, width=30) # default layers=2 width=30
+        # num_layers=3, width=50 stops learning after 40% at Accuracy = 0.920 ECE = 0.041
+        # num_layers=3, width=20 stops learning after 50% at Accuracy = 0.846 ECE = 0.043
+
     elif model_type == "densenet":
         model = Densenet(input_size=784, num_layers=2, width=10)
+    #model = model.cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    #model = model.cuda()
     train_network(model, optimizer, train_loader, num_epochs=num_epochs, pbar_update_interval=print_interval)
 
     if test_loader is None:
