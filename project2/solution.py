@@ -188,9 +188,17 @@ class BayesNet(torch.nn.Module):
         layers = [input_layer, *hidden_layers, output_layer]
         self.net = torch.nn.Sequential(*layers)
         self.num_layers = num_layers
+        self.temperature = self.temperature = nn.Parameter(torch.ones(1) * 1.2)
 
     def forward(self, x):
-        return self.net(x)
+        logits = self.net(x)
+        return self.temperature_scale(logits)
+    
+ 
+    def temperature_scale(self, logits):
+        temperature = self.temperature.unsqueeze(1).expand(logits.size(0), logits.size(1))
+        return logits / temperature
+
 
 
     def predict_class_probs(self, x, num_forward_passes=10):
@@ -261,9 +269,10 @@ def train_network(model, optimizer, train_loader, num_epochs=100, pbar_update_in
                 acc = (model(batch_x).argmax(axis=1) == batch_y).sum().float()/(len(batch_y))
                 pbar.set_postfix(loss=loss.item(), acc=acc.item())
 
-        if acc>0.8:
+        #if acc>0.7:
+        #    break
+        if loss<0.10:# and acc>0.8:
             break
-
 
 
 def evaluate_model(model, model_type, test_loader, batch_size, extended_eval, private_test):
@@ -363,14 +372,14 @@ def main(test_loader=None, private_test=False):
     print_interval = 100
     learning_rate = 5e-3  # Try playing around with this
     model_type = "bayesnet"  # Try changing this to "densenet" as a comparison
-    extended_evaluation = False  # Set this to True for additional model evaluation
+    extended_evaluation = True  # Set this to True for additional model evaluation
 
     dataset_train = load_rotated_mnist()
     train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size,
                                                shuffle=True, drop_last=True)
 
     if model_type == "bayesnet":
-        model = BayesNet(input_size=784, num_layers=2, width=30)
+        model = BayesNet(input_size=784, num_layers=2, width=50)
     elif model_type == "densenet":
         model = Densenet(input_size=784, num_layers=2, width=10)
 
