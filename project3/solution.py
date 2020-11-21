@@ -10,8 +10,12 @@ domain = np.array([[0, 5]])
 class BO_algo():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration. """
-
-        # TODO: enter your code here
+        super().__init__()
+        self.gp = gp
+        self.gp.eval()
+        self.gp.likelihood.eval()
+        self.x = x
+        self.optimize_acquisition_function()
         pass
 
 
