@@ -1,3 +1,5 @@
+import GPy
+import scipy
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 
@@ -12,7 +14,12 @@ class BO_algo():
         """Initializes the algorithm with a parameter configuration. """
 
         # TODO: enter your code here
-        pass
+        #pass
+        self.X = np.empty(shape = (1,1)) 
+        self.Y = np.empty(shape = (1,1))
+        self.Y_time = np.empty(shape = (1,1))
+        self.model_performance = None
+        self.first_run = 1
 
 
     def next_recommendation(self):
@@ -27,7 +34,14 @@ class BO_algo():
 
         # TODO: enter your code here
         # In implementing this function, you may use optimize_acquisition_function() defined below.
-        raise NotImplementedError
+        #raise NotImplementedError
+        if self.first_run: 
+            recommandation = np.array([np.ones((domain.shape[0]))])
+            self.first_run = 0
+        else: 
+            recommandation = self.optimize_acquisition_function()
+            print("optimize")
+        return recommandation
 
 
     def optimize_acquisition_function(self):
@@ -74,8 +88,15 @@ class BO_algo():
         """
 
         # TODO: enter your code here
-        raise NotImplementedError
-
+        #raise NotImplementedError
+        m,  s  = self.model_performance.predict(self.model_performance.X)
+        self.predictive_mean = m[0][0]
+        self.predictive_sigma = s[0][0] 
+        
+        z_x = ( x - self.predictive_mean ) / self.predictive_sigma 
+        PHI = scipy.stats.norm.pdf(z_x) 
+        phi = scipy.stats.norm.cdf(z_x) 
+        return self.predictive_sigma  * (z_x * PHI + phi)
 
     def add_data_point(self, x, f, v):
         """
@@ -92,7 +113,21 @@ class BO_algo():
         """
 
         # TODO: enter your code here
-        raise NotImplementedError
+        # raise NotImplementedError
+        self.X = np.concatenate((self.X, np.atleast_2d(x)), axis = 1) 
+        self.Y = np.concatenate((self.Y,  np.atleast_2d(f)), axis = 1)
+        self.Y_time = np.concatenate((self.Y_time ,  np.atleast_2d(v)), axis = 1)
+        
+        
+        if self.model_performance is None: 
+            # TODO change smoothness
+            kern_perf = GPy.kern.Matern52(input_dim = len(self.X), variance=0.5, lengthscale=0.5) # SMOOTHNESS, period=2.5) 
+            self.model_performance = GPy.models.GPRegression(self.X,   self.Y , kernel=kern_perf, noise_var=0.15)
+            #kern_speed = GPy.kern.Matern52(input_dim = len(x), variance=0.5, lengthscale=0.5) # SMOOTHNESS, period=2.5) 
+            #self.model_speed= GPy.models.GPRegression(x, np.atleast_2d(f), kernel=kern_speed, noise_var=0.15)
+     
+        else:
+            self.model_performance.set_XY(self.X , self.Y ) # set is not additive but replaces
 
     def get_solution(self):
         """
@@ -105,8 +140,12 @@ class BO_algo():
         """
 
         # TODO: enter your code here
-        raise NotImplementedError
-
+        # raise NotImplementedError
+        print(self.Y)
+        print(self.Y_time)
+        print(self.X)
+        idx = np.argmin(np.array(self.Y))
+        return self.X[0, idx]
 
 """ Toy problem to check code works as expected """
 
