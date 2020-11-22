@@ -23,10 +23,10 @@ class BO_algo():
         self.first_run = 1
         self.j_rec = 0
         self.j_add = 0
-        self.af_obj_type = "GPUCB"
+        self.af_obj_type = "ProbabilityImprovement"
         self.af_con_type = "default"
         self.rec_warmup = 5
-        self.gpucb_kappa = 1.0
+        self.gpucb_kappa = 0.75 # default: 1, better than 0.5, 2 
         self.speed_mean = 1.5
         self.speed_threshold = 1.2
 
@@ -69,7 +69,8 @@ class BO_algo():
         """
 
         def objective(x):
-            return -self.acquisition_function(x)
+            obj = self.acquisition_function(x)
+            return -obj
 
         f_values = []
         x_values = []
@@ -128,22 +129,43 @@ class BO_algo():
         elif self.af_obj_type == "GPUCB":
             m,  s  = self.model_performance.predict(np.atleast_2d(x))
             acq_value_obj =  m[0][0] + self.gpucb_kappa*s[0][0]
+        
+        elif self.af_obj_type == "ThompsonSampling": # takes very long
+            acq_value = self.model_performance.posterior_samples_f(np.atleast_2d(x))
+            acq_value_obj = acq_value[0][0][0]
+        
+        elif self.af_obj_type == "EpsGreedy":
+            eps = 0.01
+            x = x + eps * np.random.rand()
+            m, s = self.model_performance.predict(np.atleast_2d(x))
+            acq_value_obj = m[0][0]
 
-       
+        elif self.af_obj_type == "ProbabilityImprovement":
+            xi = 0.001 # default 0.01
+            idx = self.Y.argmax()
+            xmax, ymax = self.X[idx], self.Y[idx]
+            m, s = self.model_performance.predict(np.atleast_2d(x))
+            Z = (m[0][0] - ymax - xi) / s[0][0]
+            acq_value_obj = scipy.stats.norm.cdf(Z)
+        
+        elif self.af_obj_type == "MaxTraceCov":
+            m, s = self.model_performance.predict(np.atleast_2d(x))
+            acq_value_obj = s[0][0]
+
+        # calculate acquisition value for constraint 
         if self.af_con_type == "default":
-             m,  s  = self.model_speed.predict(np.atleast_2d(x))
-             m += self.speed_mean
+            m,  s  = self.model_speed.predict(np.atleast_2d(x))
+            m += self.speed_mean
 
-             z_con = (m[0][0]-self.speed_threshold)/s[0][0]
-             cdf_con = scipy.stats.norm.cdf(z_con)
+            z_con = (m[0][0]-self.speed_threshold)/s[0][0]
+            cdf_con = scipy.stats.norm.cdf(z_con)
 
-             acq_value_con = cdf_con
+            acq_value_con = cdf_con
 
         acq_value = acq_value_obj*acq_value_con
 
         return acq_value
-
-
+    
     def add_data_point(self, x, f, v):
         """
         Add data points to the model.
