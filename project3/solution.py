@@ -228,7 +228,7 @@ class BO_algo():
 
         perfs = np.array(self.Y.flatten())
         speeds = np.array(self.Y_time.flatten())
-        perfs_con_masked = perfs*(speeds>1.2)
+        perfs_con_masked = perfs*(speeds>self.speed_threshold)
         idx = np.argmax(perfs_con_masked)
         solution = self.X[idx,0]
         print(solution)
