@@ -23,10 +23,10 @@ class BO_algo():
         self.first_run = 1
         self.j_rec = 0
         self.j_add = 0
-        self.af_obj_type = "ProbabilityImprovement"
+        self.af_obj_type = "GPUCB"
         self.af_con_type = "default"
-        self.rec_warmup = 5
-        self.gpucb_kappa = 0.75 # default: 1, better than 0.5, 2 
+        self.rec_warmup = 3
+        self.gpucb_kappa = 1.2 # default: 1, better than 0.5, 0.75, 1.25, 1.1, 1.5, 2, best 1.2
         self.speed_mean = 1.5
         self.speed_threshold = 1.2
 
