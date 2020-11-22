@@ -24,11 +24,16 @@ class BO_algo():
         self.j_rec = 0
         self.j_add = 0
 
-        self.af_type = "GPUCB"
+        self.af_obj_type = "GPUCB"
+        self.af_con_type = "default"
 
         self.rec_warmup = 5
 
         self.gpucb_kappa = 1.0
+        
+        self.speed_mean = 1.5
+        self.speed_threshold = 1.2
+
 
     def next_recommendation(self):
         """
@@ -102,7 +107,10 @@ class BO_algo():
         # TODO: enter your code here
         #raise NotImplementedError
 
-        if self.af_type == "EI":
+        acq_value_obj = 1.0
+        acq_value_con = 1.0
+
+        if self.af_obj_type == "EI":
             #m,  s  = self.model_performance.predict(np.transpose(self.model_performance.X))
             x_acq = np.linspace(0,5,100).reshape((100,1))
             #m,  s  = self.model_performance.predict(self.model_performance.X)
@@ -118,11 +126,24 @@ class BO_algo():
             z_x = ( x - self.predictive_mean ) / self.predictive_sigma 
             PHI = scipy.stats.norm.pdf(z_x) 
             phi = scipy.stats.norm.cdf(z_x) 
-            acq_value = self.predictive_sigma  * (z_x * PHI + phi)
+            acq_value_obj = self.predictive_sigma  * (z_x * PHI + phi)
 
-        elif self.af_type == "GPUCB":
+        elif self.af_obj_type == "GPUCB":
             m,  s  = self.model_performance.predict(np.atleast_2d(x))
-            acq_value =  m[0][0] + self.gpucb_kappa*s[0][0]
+            acq_value_obj =  m[0][0] + self.gpucb_kappa*s[0][0]
+
+       
+        if self.af_con_type == "default":
+             m,  s  = self.model_speed.predict(np.atleast_2d(x))
+             m += self.speed_mean
+
+             z_con = (m[0][0]-self.speed_threshold)/s[0][0]
+             cdf_con = scipy.stats.norm.cdf(z_con)
+
+             acq_value_con = cdf_con
+
+        acq_value = acq_value_obj*acq_value_con
+
         return acq_value
 
 
@@ -160,11 +181,14 @@ class BO_algo():
             #kern_perf = GPy.kern.Matern52(input_dim = len(self.X), variance=0.5, lengthscale=0.5) # SMOOTHNESS, period=2.5)
             kern_perf = GPy.kern.Matern52(input_dim = 1, variance=0.5, lengthscale=0.5) # SMOOTHNESS, period=2.5) 
             self.model_performance = GPy.models.GPRegression(self.X,   self.Y , kernel=kern_perf, noise_var=0.15)
-            #kern_speed = GPy.kern.Matern52(input_dim = len(x), variance=0.5, lengthscale=0.5) # SMOOTHNESS, period=2.5) 
-            #self.model_speed= GPy.models.GPRegression(x, np.atleast_2d(f), kernel=kern_speed, noise_var=0.15)
+
+            kern_speed = GPy.kern.Matern52(input_dim = 1, variance=np.sqrt(2.0), lengthscale=0.5) # SMOOTHNESS, period=2.5) 
+            self.model_speed = GPy.models.GPRegression(self.X, self.Y_time-self.speed_mean, kernel=kern_speed, noise_var=0.0001)
      
         else:
             self.model_performance.set_XY(self.X , self.Y ) # set is not additive but replaces
+            self.model_speed.set_XY(self.X, self.Y_time-self.speed_mean)
+
         self.j_add += 1
 
     def get_solution(self):
@@ -182,7 +206,11 @@ class BO_algo():
         print(self.Y.flatten())
         print(self.Y_time.flatten())
         print(self.X.flatten())
-        idx = np.argmax(np.array(self.Y))
+
+        perfs = np.array(self.Y.flatten())
+        speeds = np.array(self.Y_time.flatten())
+        perfs_con_masked = perfs*(speeds>1.2)
+        idx = np.argmax(perfs_con_masked)
         solution = self.X[idx,0]
         print(solution)
         return solution
