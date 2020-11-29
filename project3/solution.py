@@ -162,7 +162,7 @@ class BO_algo():
 
             acq_value_con = cdf_con
 
-        acq_value = acq_value_obj*acq_value_con
+        acq_value = acq_value_obj #*acq_value_con
 
         return acq_value
     
