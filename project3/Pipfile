@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "==1.19.1"
+scipy = "==1.5.1"
+pyarmor = "==6.3.3"
+cryptography = "==3.0"
+matplotlib = "==3.3.1"
+sklearn = "*"
+GPy = "==1.9.9"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"
