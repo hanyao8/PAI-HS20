@@ -105,7 +105,12 @@ class MLPActorCritic(nn.Module):
         #    3. The log-probability of the action under the policy output distribution
         # Hint: This function is only called during inference. You should use
         # `torch.no_grad` to ensure that it does not interfer with the gradient computation.
-        return 0, 0, 0
+        #LP
+        with torch.no_grad():
+            pi, logp_a = self.pi.forward(state)
+            val = self.v.forward(state) 
+            act = pi.sample() 
+        return act.item(), val, logp_a
 
     def act(self, state):
         return self.step(state)[0]
@@ -159,10 +164,11 @@ class VPGBuffer:
         # Hint: we do the discounting for you, you just need to compute 'deltas'.
         # see the handout for more info
         # deltas = rews[:-1] + ...
-        deltas = rews[:-1]
-        self.tdres_buf[path_slice] = discount_cumsum(deltas, self.gamma*self.lam)
-
+        #LP
+        deltas = rews[:-1] + vals[-1] - vals[-2]
+        self.tdres_buf[path_slice] = discount_cumsum(deltas, self.gamma*self.lam) #using the TD-residual instead of Rt:(τ)
         #TODO: compute the discounted rewards-to-go. Hint: use the discount_cumsum function
+        self.ret_buf[path_slice] = discount_cumsum(rews[:-1], self.gamma*self.lam)
 
         self.path_start_idx = self.ptr
 
@@ -176,7 +182,8 @@ class VPGBuffer:
         self.ptr, self.path_start_idx = 0, 0
 
         # TODO: Normalize the TD-residuals in self.tdres_buf
-        self.tdres_buf = self.tdres_buf
+        #LP
+        self.tdres_buf =(self.tdres_buf - self.tdres_buf.mean()) / (self.tdres_buf.std() + 1e-12)
 
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                     tdres=self.tdres_buf, logp=self.logp_buf)
@@ -269,7 +276,7 @@ class Agent:
             # the policy and / or value function.
             # TODO: Implement the polcy and value function update. Hint: some of the torch code is
             # done for you.
-
+            
             data = buf.get()
 
             #Do 1 policy gradient update
