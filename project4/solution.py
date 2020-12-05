@@ -165,10 +165,11 @@ class VPGBuffer:
         # see the handout for more info
         # deltas = rews[:-1] + ...
         #LP
-        deltas = rews[:-1] + vals[-1] - vals[-2]
+        deltas = rews[:-1] + vals[-1] - vals[-2] # rt + V(st+1) - V(st)
         self.tdres_buf[path_slice] = discount_cumsum(deltas, self.gamma*self.lam) #using the TD-residual instead of Rt:(τ)
         #TODO: compute the discounted rewards-to-go. Hint: use the discount_cumsum function
-        self.ret_buf[path_slice] = discount_cumsum(rews[:-1], self.gamma*self.lam)
+        # typically an extra hyperparameter λ is used in the discouting of the TD residual
+        self.ret_buf[path_slice] = discount_cumsum(rews[:-1], self.lam) #self.gamma*self.lam)
 
         self.path_start_idx = self.ptr
 
@@ -183,7 +184,7 @@ class VPGBuffer:
 
         # TODO: Normalize the TD-residuals in self.tdres_buf
         #LP
-        self.tdres_buf =(self.tdres_buf - self.tdres_buf.mean()) / (self.tdres_buf.std() + 1e-12)
+        self.tdres_buf = (self.tdres_buf - self.tdres_buf.mean()) / (self.tdres_buf.std() + 1e-12)
 
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                     tdres=self.tdres_buf, logp=self.logp_buf)
@@ -284,12 +285,16 @@ class Agent:
 
             #Hint: you need to compute a 'loss' such that its derivative with respect to the policy
             #parameters is the policy gradient. Then call loss.backwards() and pi_optimizer.step()
+            policy_loss = self.ac.pi.forward() # MLPCategoricalActor == class for the policy network
+            policy_loss.backwards()
+            pi_optimizer.step()
 
             #We suggest to do 100 iterations of value function updates
             for _ in range(100):
                 v_optimizer.zero_grad()
                 #compute a loss for the value function, call loss.backwards() and then
                 #v_optimizer.step()
+                value_loss = self.ac.v # MLPCritic == network used by the value function
 
 
         return True
