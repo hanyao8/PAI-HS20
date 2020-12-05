@@ -173,7 +173,6 @@ class VPGBuffer:
 
         self.path_start_idx = self.ptr
 
-
     def get(self):
         """
         Call after an epoch ends. Resets pointers and returns the buffer contents.
@@ -279,22 +278,32 @@ class Agent:
             # done for you.
             
             data = buf.get()
+            # obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
+            #        tdres=self.tdres_buf, logp=self.logp_buf
+            # observed outcomes
+            # actions 
+            # discounted rewards-to-go
+            # log probabilities of chosen actions under behavior policy
+            # normalized TD-residuals 
 
             #Do 1 policy gradient update
             pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
 
             #Hint: you need to compute a 'loss' such that its derivative with respect to the policy
-            #parameters is the policy gradient. Then call loss.backwards() and pi_optimizer.step()
-            policy_loss = self.ac.pi.forward() # MLPCategoricalActor == class for the policy network
-            policy_loss.backwards()
+            #parameters is the policy gradient. Then call loss.backward() and pi_optimizer.step()
+            policy_loss = (torch.sum(torch.mul(data["tdres"], data["logp"]).mul(-1), -1)) # self.ac.pi.forward() # MLPCategoricalActor == class for the policy network
+            policy_loss.backward()
             pi_optimizer.step()
 
             #We suggest to do 100 iterations of value function updates
             for _ in range(100):
                 v_optimizer.zero_grad()
-                #compute a loss for the value function, call loss.backwards() and then
+                #compute a loss for the value function, call loss.backward() and then
                 #v_optimizer.step()
-                value_loss = self.ac.v # MLPCritic == network used by the value function
+                # When training the value function, the reward-to-go can be used as a target for the loss
+                value_loss = (torch.sum(torch.mul(data.tdres, data.logp).mul(-1), -1)) # MLPCritic == network used by the value function
+                value_loss.backward()
+                v_optimizer.step()
 
 
         return True
