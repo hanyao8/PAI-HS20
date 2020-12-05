@@ -11,6 +11,7 @@ from torch.optim import Adam
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
+
 def discount_cumsum(x, discount):
     """
     Compute  cumulative sums of vectors.
@@ -107,9 +108,10 @@ class MLPActorCritic(nn.Module):
         # `torch.no_grad` to ensure that it does not interfer with the gradient computation.
         #LP
         with torch.no_grad():
-            pi, logp_a = self.pi.forward(state)
+            Pi, _ = self.pi.forward(state)
             val = self.v.forward(state) 
-            act = pi.sample() 
+            act = Pi.sample() 
+            logp_a =  self.pi._log_prob_from_distribution(Pi, act)
         return act.item(), val, logp_a
 
     def act(self, state):
@@ -187,6 +189,7 @@ class VPGBuffer:
 
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                     tdres=self.tdres_buf, logp=self.logp_buf)
+
         return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in data.items()}
 
 
@@ -244,7 +247,6 @@ class Agent:
             ep_returns = []
             for t in range(steps_per_epoch):
                 a, v, logp = self.ac.step(torch.as_tensor(state, dtype=torch.float32))
-
                 next_state, r, terminal = self.env.transition(a)
                 ep_ret += r
                 ep_len += 1
@@ -276,21 +278,41 @@ class Agent:
             # the policy and / or value function.
             # TODO: Implement the polcy and value function update. Hint: some of the torch code is
             # done for you.
-            
+
             data = buf.get()
-
-            #Do 1 policy gradient update
-            pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
-
+            
             #Hint: you need to compute a 'loss' such that its derivative with respect to the policy
             #parameters is the policy gradient. Then call loss.backwards() and pi_optimizer.step()
+            #Do 1 policy gradient update
+            #LP
+            Pi, _ = self.ac.pi.forward(data['obs'])
+            act = Pi.sample() 
+            logp_a =  self.ac.pi._log_prob_from_distribution(Pi, act)
+            ## Option 1 with Rewards to go Rt: 
+            #loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['ret'], logp_a))**2 
+            ## Option 3 Rt: with use of a baseline
+            ## Option 3 with TD residuals, leads to estimators with lower variance
+            loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['tdres'], logp_a))**2 
+            loss_policy.backward()
+            pi_optimizer.step()
+            pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
+            #print(self.ac.pi.logits_net[0].weight.grad)
+            
 
+            
             #We suggest to do 100 iterations of value function updates
+            #compute a loss for the value function, call loss.backwards() and then #v_optimizer.step()
+            #LP
+            # or do we want to accumulate gradients? No
             for _ in range(100):
+                Val = self.ac.v.forward(data['obs'])
+                #When training the value function, the reward-to-go can be used as a target for the loss.
+                criterion = nn.MSELoss()
+                loss_valfn = criterion(Val, data['ret'] )
                 v_optimizer.zero_grad()
-                #compute a loss for the value function, call loss.backwards() and then
-                #v_optimizer.step()
-
+                loss_valfn.backward()#retain_graph=True)#retain_graph=True)
+                v_optimizer.step()
+                #print(self.ac.v.v_net[0].weight.grad)
 
         return True
 
@@ -304,7 +326,9 @@ class Agent:
         """
         # TODO: Implement this function.
         # Currently, this just returns a random action.
-        return np.random.choice([0, 1, 2, 3])
+        #LP
+        obs = torch.as_tensor(obs, dtype=torch.float32)
+        return self.ac.act(obs)
 
 
 def main():
