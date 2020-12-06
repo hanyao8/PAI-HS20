@@ -82,7 +82,7 @@ class MLPActorCritic(nn.Module):
     """Class to combine policy and value function neural networks."""
 
     def __init__(self,
-                 hidden_sizes=(96,96), activation=nn.Tanh): # tried 16, 32, 96 and 128, default is 64 (seems best)
+                 hidden_sizes=(64,64), activation=nn.Tanh): # tried 16, 32, 96 and 128, default is 64 (seems best)
         super().__init__()
 
         obs_dim = 8
