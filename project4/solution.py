@@ -7,7 +7,7 @@ import scipy.signal
 from gym.spaces import Box, Discrete
 
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, Adagrad
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
@@ -32,7 +32,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     layers = []
     for j in range(len(sizes)-1):
         act = activation if j < len(sizes)-2 else output_activation
-        layers += [nn.Linear(sizes[j], sizes[j+1]), act()]
+        layers += [nn.Linear(sizes[j], sizes[j+1]), nn.Dropout(p=0.6), act()]
     return nn.Sequential(*layers)
 
 
@@ -241,7 +241,7 @@ class Agent:
         # Initialize the ADAM optimizer using the parameters
         # of the policy and then value networks
         # TODO: Use these optimizers later to update the policy and value networks.
-        pi_optimizer = Adam(self.ac.pi.parameters(), lr=pi_lr)
+        pi_optimizer = Adam(self.ac.pi.parameters(), lr=pi_lr) # only adagrad lr_decay=0.99
         v_optimizer = Adam(self.ac.v.parameters(), lr=vf_lr)
 
         # Initialize the environment
@@ -297,12 +297,18 @@ class Agent:
             ## Option 1 with Rewards to go Rt: 
             #loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['ret'], logp_a))**2 
             # rewards to go are already discounted
-            loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
+            #loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
+
+            # rewards-to-go normalized
+            rewards = (data['ret'] - data['ret'].mean()) / (data['ret'].std() + 1e-12)
+            loss_policy = - 0.5 * (torch.dot(rewards, logp_a))**2 
 
             ## Option 3 Rt: with use of a baseline
+            #loss_policy = - (torch.dot((data['ret'] - data['ret'].mean()), logp_a))
+
             ## Option 3 with TD residuals, leads to estimators with lower variance
             # Generalized Advantage Estimation
-            #loss_policy = - 0.5 * (torch.dot(data['tdres'], logp_a))**2 
+            #loss_policy = (torch.dot(data['tdres'], logp_a))**2 
 
             pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             loss_policy.backward()
