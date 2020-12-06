@@ -11,7 +11,6 @@ from torch.optim import Adam, Adagrad
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
-
 def discount_cumsum(x, discount):
     """
     Compute  cumulative sums of vectors.
@@ -32,7 +31,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     layers = []
     for j in range(len(sizes)-1):
         act = activation if j < len(sizes)-2 else output_activation
-        layers += [nn.Linear(sizes[j], sizes[j+1]), nn.Dropout(p=0.6), act()]
+        layers += [nn.Linear(sizes[j], sizes[j+1]), act()] # nn.Dropout(p=0.1),
     return nn.Sequential(*layers)
 
 
@@ -175,7 +174,7 @@ class VPGBuffer:
         
         #TODO: compute the discounted rewards-to-go. Hint: use the discount_cumsum function
         # cumsum -> Output: [x0 + discount * x1 + discount^2 * x2, x1 + discount * x2, ..., xn]
-        self.ret_buf[path_slice] = discount_cumsum(rews[1:], self.gamma)
+        self.ret_buf[path_slice] = discount_cumsum(rews[:-1], self.gamma)
 
         self.path_start_idx = self.ptr
 
@@ -224,7 +223,7 @@ class Agent:
         # Number of training steps per epoch
         steps_per_epoch = 3000
         # Number of epochs to train for
-        epochs = 100 # 50
+        epochs = 60 # 50
         # The longest an episode can go on before cutting it off
         max_ep_len = 300
         # Discount factor for weighting future rewards
@@ -290,31 +289,31 @@ class Agent:
             #parameters is the policy gradient. Then call loss.backwards() and pi_optimizer.step()
             #Do 1 policy gradient update
             #LP
-            Pi = self.ac.pi._distribution(data['obs']) # the same as forward without act 
-            act = Pi.sample() 
-            logp_a =  self.ac.pi._log_prob_from_distribution(Pi, act)
+            pi = self.ac.pi._distribution(data['obs']) # the same as forward without act 
+            act = pi.sample() 
+            logp_a =  self.ac.pi._log_prob_from_distribution(pi, act)
             
             ## Option 1 with Rewards to go Rt: 
             #loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['ret'], logp_a))**2 
             # rewards to go are already discounted
-            #loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
+            loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
 
             # rewards-to-go normalized
-            rewards = (data['ret'] - data['ret'].mean()) / (data['ret'].std() + 1e-12)
-            loss_policy = - 0.5 * (torch.dot(rewards, logp_a))**2 
+            # rewards = (data['ret'] - data['ret'].mean()) / (data['ret'].std() + 1e-12)
+            #loss_policy = - 0.5 * (torch.dot(rewards, logp_a))**2 
 
             ## Option 3 Rt: with use of a baseline
             #loss_policy = - (torch.dot((data['ret'] - data['ret'].mean()), logp_a))
 
             ## Option 3 with TD residuals, leads to estimators with lower variance
             # Generalized Advantage Estimation
-            #loss_policy = (torch.dot(data['tdres'], logp_a))**2 
+            # loss_policy = - (torch.dot(data['tdres'], logp_a))**2 
 
             pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             loss_policy.backward()
             pi_optimizer.step()
             #print(self.ac.pi.logits_net[0].weight.grad)
-            # (torch.sum(torch.mul(data["tdres"], data["logp"]).mul(-1), -1))
+            # (torch.sum(torch.mul(data["tdres"], data["logp"]).mul(-1), -1))'''
             
 
             
@@ -322,16 +321,17 @@ class Agent:
             #compute a loss for the value function, call loss.backwards() and then #v_optimizer.step()
             #LP
             # or do we want to accumulate gradients? No
-            for _ in range(100):
+            for _ in range(50):
                 Val = self.ac.v.forward(data['obs'])
                 #When training the value function, the reward-to-go can be used as a target for the loss.
                 criterion = nn.MSELoss()
+                #criterion = nn.L1Loss()
                 loss_valfn = criterion(Val, data['ret'] )
 
                 v_optimizer.zero_grad()
                 loss_valfn.backward()#retain_graph=True)#retain_graph=True)
                 v_optimizer.step()
-                #print(self.ac.v.v_net[0].weight.grad)
+                #print(self.ac.v.v_net[0].weight.grad)'''
 
         return True
 
