@@ -115,6 +115,7 @@ class MLPActorCritic(nn.Module):
         return act.item(), val, logp_a
 
     def act(self, state):
+        # this samples a random action
         return self.step(state)[0]
 
 
@@ -223,7 +224,7 @@ class Agent:
         # Number of training steps per epoch
         steps_per_epoch = 3000
         # Number of epochs to train for
-        epochs = 50
+        epochs = 100 # 50
         # The longest an episode can go on before cutting it off
         max_ep_len = 300
         # Discount factor for weighting future rewards
@@ -301,8 +302,8 @@ class Agent:
             ## Option 3 Rt: with use of a baseline
             ## Option 3 with TD residuals, leads to estimators with lower variance
             # Generalized Advantage Estimation
+            #loss_policy = - 0.5 * (torch.dot(data['tdres'], logp_a))**2 
 
-            
             pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             loss_policy.backward()
             pi_optimizer.step()
@@ -340,7 +341,16 @@ class Agent:
         # Currently, this just returns a random action.
         #LP
         obs = torch.as_tensor(obs, dtype=torch.float32)
-        return self.ac.act(obs)
+        action = self.ac.act(obs) # return self.step(state)[0] 
+        # self.ac.act also has "no_grad", this is not a problem since it is only used during evaluation
+
+        #action = self.ac.pi._distribution(obs).sample()
+        #logp_a =  self.ac.pi._log_prob_from_distribution(Pi, 0)
+        # assume we want to get the best action for evaluation
+
+        #action = self.ac.pi._distribution(obs).sample()
+        #action = torch.argmax(self.ac.pi._distribution(obs).logits)
+        return action
 
 
 def main():
