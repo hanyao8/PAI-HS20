@@ -300,7 +300,9 @@ class Agent:
 
             ## Option 3 Rt: with use of a baseline
             ## Option 3 with TD residuals, leads to estimators with lower variance
- 
+            # Generalized Advantage Estimation
+
+            
             pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             loss_policy.backward()
             pi_optimizer.step()
