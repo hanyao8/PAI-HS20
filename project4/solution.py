@@ -175,7 +175,7 @@ class VPGBuffer:
         
         #TODO: compute the discounted rewards-to-go. Hint: use the discount_cumsum function
         # cumsum -> Output: [x0 + discount * x1 + discount^2 * x2, x1 + discount * x2, ..., xn]
-        self.ret_buf[path_slice] = discount_cumsum(rews[:-1], self.gamma)
+        self.ret_buf[path_slice] = discount_cumsum(rews[1:], self.gamma)
 
         self.path_start_idx = self.ptr
 
