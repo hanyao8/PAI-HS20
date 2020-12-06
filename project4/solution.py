@@ -109,8 +109,8 @@ class MLPActorCritic(nn.Module):
         #LP
         with torch.no_grad():
             Pi, _ = self.pi.forward(state)
-            val = self.v.forward(state) 
             act = Pi.sample() 
+            val = self.v.forward(state) 
             logp_a =  self.pi._log_prob_from_distribution(Pi, act)
         return act.item(), val, logp_a
 
@@ -167,10 +167,14 @@ class VPGBuffer:
         # see the handout for more info
         # deltas = rews[:-1] + ...
         #LP
-        deltas = rews[:-1] + vals[-1] - vals[-2]
+        # [:-1] returns all elements [:] except the last one -1
+        deltas = rews[:-1] + vals[-1] - vals[-2] # current value minus value before 
+        # next line was given in the template
         self.tdres_buf[path_slice] = discount_cumsum(deltas, self.gamma*self.lam) #using the TD-residual instead of Rt:(τ)
+        
         #TODO: compute the discounted rewards-to-go. Hint: use the discount_cumsum function
-        self.ret_buf[path_slice] = discount_cumsum(rews[:-1], self.gamma*self.lam)
+        # cumsum -> Output: [x0 + discount * x1 + discount^2 * x2, x1 + discount * x2, ..., xn]
+        self.ret_buf[path_slice] = discount_cumsum(rews[:-1], self.gamma)
 
         self.path_start_idx = self.ptr
 
@@ -185,7 +189,7 @@ class VPGBuffer:
 
         # TODO: Normalize the TD-residuals in self.tdres_buf
         #LP
-        self.tdres_buf =(self.tdres_buf - self.tdres_buf.mean()) / (self.tdres_buf.std() + 1e-12)
+        self.tdres_buf = (self.tdres_buf - self.tdres_buf.mean()) / (self.tdres_buf.std() + 1e-12)
 
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                     tdres=self.tdres_buf, logp=self.logp_buf)
@@ -227,8 +231,8 @@ class Agent:
         lam = 0.97
 
         # Learning rates for policy and value function
-        pi_lr = 3e-3
-        vf_lr = 1e-3
+        pi_lr = 0.1 #default: 3e-3
+        vf_lr = 0.1 #default: 1e-3
 
         # Set up buffer
         buf = VPGBuffer(obs_dim, act_dim, steps_per_epoch, gamma, lam)
@@ -285,18 +289,23 @@ class Agent:
             #parameters is the policy gradient. Then call loss.backwards() and pi_optimizer.step()
             #Do 1 policy gradient update
             #LP
-            Pi, _ = self.ac.pi.forward(data['obs'])
+            Pi = self.ac.pi._distribution(data['obs']) # the same as forward without act 
             act = Pi.sample() 
             logp_a =  self.ac.pi._log_prob_from_distribution(Pi, act)
+            
             ## Option 1 with Rewards to go Rt: 
             #loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['ret'], logp_a))**2 
+            # rewards to go are already discounted
+            loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
+
             ## Option 3 Rt: with use of a baseline
             ## Option 3 with TD residuals, leads to estimators with lower variance
-            loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['tdres'], logp_a))**2 
+ 
+            pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             loss_policy.backward()
             pi_optimizer.step()
-            pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             #print(self.ac.pi.logits_net[0].weight.grad)
+            # (torch.sum(torch.mul(data["tdres"], data["logp"]).mul(-1), -1))
             
 
             
@@ -309,6 +318,7 @@ class Agent:
                 #When training the value function, the reward-to-go can be used as a target for the loss.
                 criterion = nn.MSELoss()
                 loss_valfn = criterion(Val, data['ret'] )
+
                 v_optimizer.zero_grad()
                 loss_valfn.backward()#retain_graph=True)#retain_graph=True)
                 v_optimizer.step()
