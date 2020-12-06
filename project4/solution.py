@@ -82,7 +82,7 @@ class MLPActorCritic(nn.Module):
     """Class to combine policy and value function neural networks."""
 
     def __init__(self,
-                 hidden_sizes=(64,64), activation=nn.Tanh):
+                 hidden_sizes=(96,96), activation=nn.Tanh): # tried 16, 32, 96 and 128, default is 64 (seems best)
         super().__init__()
 
         obs_dim = 8
@@ -296,11 +296,11 @@ class Agent:
             ## Option 1 with Rewards to go Rt: 
             #loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['ret'], logp_a))**2 
             # rewards to go are already discounted
-            loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
+            #loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
 
             # rewards-to-go normalized
-            # rewards = (data['ret'] - data['ret'].mean()) / (data['ret'].std() + 1e-12)
-            #loss_policy = - 0.5 * (torch.dot(rewards, logp_a))**2 
+            rewards = (data['ret'] - data['ret'].mean()) / (data['ret'].std() + 1e-12)
+            loss_policy = - 0.5 * (torch.dot(rewards, logp_a))**2 
 
             ## Option 3 Rt: with use of a baseline
             #loss_policy = - (torch.dot((data['ret'] - data['ret'].mean()), logp_a))
@@ -321,10 +321,10 @@ class Agent:
             #compute a loss for the value function, call loss.backwards() and then #v_optimizer.step()
             #LP
             # or do we want to accumulate gradients? No
-            for _ in range(50):
+            criterion = nn.MSELoss()
+            for _ in range(100): # less than 100 is a bit faster but usually no good results for <= 30
                 Val = self.ac.v.forward(data['obs'])
                 #When training the value function, the reward-to-go can be used as a target for the loss.
-                criterion = nn.MSELoss()
                 #criterion = nn.L1Loss()
                 loss_valfn = criterion(Val, data['ret'] )
 
