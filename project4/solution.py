@@ -11,7 +11,6 @@ from torch.optim import Adam, Adagrad
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
-
 def discount_cumsum(x, discount):
     """
     Compute  cumulative sums of vectors.
@@ -32,7 +31,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     layers = []
     for j in range(len(sizes)-1):
         act = activation if j < len(sizes)-2 else output_activation
-        layers += [nn.Linear(sizes[j], sizes[j+1]), nn.Dropout(p=0.6), act()]
+        layers += [nn.Linear(sizes[j], sizes[j+1]), act()] # nn.Dropout(p=0.1),
     return nn.Sequential(*layers)
 
 
@@ -83,7 +82,7 @@ class MLPActorCritic(nn.Module):
     """Class to combine policy and value function neural networks."""
 
     def __init__(self,
-                 hidden_sizes=(64,64), activation=nn.Tanh):
+                 hidden_sizes=(64,64), activation=nn.Tanh): # tried 16, 32, 96 and 128, default is 64 (seems best)
         super().__init__()
 
         obs_dim = 8
@@ -308,13 +307,14 @@ class Agent:
 
             ## Option 3 with TD residuals, leads to estimators with lower variance
             # Generalized Advantage Estimation
-            #loss_policy = - (torch.dot(data['tdres'], logp_a))
+            # loss_policy = - (torch.dot(data['tdres'], logp_a))
+            # loss_policy = - (torch.dot(data['tdres'], logp_a))**2 
 
             pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             loss_policy.backward()
             pi_optimizer.step()
             #print(self.ac.pi.logits_net[0].weight.grad)
-            # (torch.sum(torch.mul(data["tdres"], data["logp"]).mul(-1), -1))
+            # (torch.sum(torch.mul(data["tdres"], data["logp"]).mul(-1), -1))'''
             
 
             
@@ -331,7 +331,7 @@ class Agent:
                 v_optimizer.zero_grad()
                 loss_valfn.backward()#retain_graph=True)#retain_graph=True)
                 v_optimizer.step()
-                #print(self.ac.v.v_net[0].weight.grad)
+                #print(self.ac.v.v_net[0].weight.grad)'''
 
         return True
 
