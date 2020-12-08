@@ -169,13 +169,13 @@ class VPGBuffer:
         # deltas = rews[:-1] + ...
         #LP
         # [:-1] returns all elements [:] except the last one -1
-        deltas = rews[:-1] + vals[-1] - vals[-2] # current value minus value before 
+        deltas = rews[:-1] + vals[1:] - vals[:-1] # current value minus value before 
         # next line was given in the template
         self.tdres_buf[path_slice] = discount_cumsum(deltas, self.gamma*self.lam) #using the TD-residual instead of Rt:(τ)
         
         #TODO: compute the discounted rewards-to-go. Hint: use the discount_cumsum function
         # cumsum -> Output: [x0 + discount * x1 + discount^2 * x2, x1 + discount * x2, ..., xn]
-        self.ret_buf[path_slice] = discount_cumsum(rews[1:], self.gamma)
+        self.ret_buf[path_slice] = discount_cumsum(rews, self.gamma)[:-1] # [:-1]
 
         self.path_start_idx = self.ptr
 
@@ -222,18 +222,18 @@ class Agent:
         # Training parameters
         # You may wish to change the following settings for the buffer and training
         # Number of training steps per epoch
-        steps_per_epoch = 3000
+        steps_per_epoch = 900 # default 3000
         # Number of epochs to train for
         epochs = 100 # 50
         # The longest an episode can go on before cutting it off
-        max_ep_len = 300
+        max_ep_len = 300 # default 300
         # Discount factor for weighting future rewards
         gamma = 0.99
         lam = 0.97
 
         # Learning rates for policy and value function
-        pi_lr = 0.1 #default: 3e-3
-        vf_lr = 0.1 #default: 1e-3
+        pi_lr = 0.01 #default: 3e-3
+        vf_lr = 0.005 #default: 1e-3
 
         # Set up buffer
         buf = VPGBuffer(obs_dim, act_dim, steps_per_epoch, gamma, lam)
@@ -297,18 +297,18 @@ class Agent:
             ## Option 1 with Rewards to go Rt: 
             #loss_policy = - 0.5 * ( (gamma **epoch ) * torch.dot(data['ret'], logp_a))**2 
             # rewards to go are already discounted
-            #loss_policy = - 0.5 * (torch.dot(data['ret'], logp_a))**2 
+            loss_policy = - (torch.dot(data['ret'], logp_a)) 
 
             # rewards-to-go normalized
-            rewards = (data['ret'] - data['ret'].mean()) / (data['ret'].std() + 1e-12)
-            loss_policy = - 0.5 * (torch.dot(rewards, logp_a))**2 
+            #rewards = (data['ret'] - data['ret'].mean()) / (data['ret'].std() + 1e-12)
+            #loss_policy = - 0.5 * (torch.dot(rewards, logp_a))**2 
 
             ## Option 3 Rt: with use of a baseline
             #loss_policy = - (torch.dot((data['ret'] - data['ret'].mean()), logp_a))
 
             ## Option 3 with TD residuals, leads to estimators with lower variance
             # Generalized Advantage Estimation
-            #loss_policy = (torch.dot(data['tdres'], logp_a))**2 
+            #loss_policy = - 0.5 * (torch.dot(data['tdres'], logp_a))**2 
 
             pi_optimizer.zero_grad() #reset the gradient in the policy optimizer
             loss_policy.backward()
@@ -322,7 +322,7 @@ class Agent:
             #compute a loss for the value function, call loss.backwards() and then #v_optimizer.step()
             #LP
             # or do we want to accumulate gradients? No
-            for _ in range(100):
+            for _ in range(10):
                 Val = self.ac.v.forward(data['obs'])
                 #When training the value function, the reward-to-go can be used as a target for the loss.
                 criterion = nn.MSELoss()
