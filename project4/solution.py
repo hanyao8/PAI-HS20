@@ -224,7 +224,7 @@ class Agent:
         # Number of training steps per epoch
         steps_per_epoch = 3000
         # Number of epochs to train for
-        epochs = 50
+        rpochs = 100
         # The longest an episode can go on before cutting it off
         max_ep_len = 300
         # Discount factor for weighting future rewards
